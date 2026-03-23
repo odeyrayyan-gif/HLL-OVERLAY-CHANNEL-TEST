@@ -165,6 +165,14 @@ const ARTY_EXCLUSIONS = [
     "howitzer", "artillery", "150mm", "155mm", "152mm", "122mm", "105mm", "lefh", "sfh",
     "katyusha", "mlrs", "zis-3", "zis3", "brumm", "stuh", "strumpanzer"
 ];
+const ARMOR_EXCLUSIONS = [
+    "panzer", "tiger", "panther", "puma", "sd.kfz", "luchs", "lux", "marder",
+    "sherman", "stuart", "greyhound", "jumbo", "m4a3", "m4a1", "m5a1", "m8",
+    "firefly", "cromwell", "crusader", "churchill", "tetrarch", "daimler",
+    "is-1", "is-2", "is2", "t-34", "t34", "t-70", "ba-10",
+    "coaxial", "kwk", "75mm cannon", "75mm m3", "76mm m1", "88mm kwk",
+    "qf 75mm", "qf 6 pounder", "qf 2 pounder", "17pdr", "17 pounder", "hull mg", "besa"
+];
 
 function isArtillery(p) {
     if (!p.weapons) return false;
@@ -173,11 +181,21 @@ function isArtillery(p) {
     );
 }
 
+function isArmorCrew(p) {
+    const vehicleKills = Number(p?.v_kills ?? p?.vehicle_kills ?? p?.vehicles_destroyed ?? 0);
+    if (Number.isFinite(vehicleKills) && vehicleKills > 0) return true;
+    const weaponNames = Object.keys((p && p.weapons) || {});
+    if (!weaponNames.length) return false;
+    const wAll = weaponNames.join(" ").toLowerCase();
+    if (ARTY_EXCLUSIONS.some(k => wAll.includes(k))) return false;
+    return ARMOR_EXCLUSIONS.some(k => wAll.includes(k));
+}
+
 function getPlayers(data) {
     const stats = data?.result?.stats;
     if (!Array.isArray(stats)) return [];
     return stats
-        .filter(p => !isArtillery(p))
+        .filter(p => !isArtillery(p) && !isArmorCrew(p))
         .map(p => ({
             name: p.player || "Unknown",
             kills: Number(p.kills || 0),
