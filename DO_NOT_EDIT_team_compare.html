@@ -104,6 +104,8 @@
         "tokarev", "nagant", "luger", "walther", "p38"
     ];
     const TANK_ROLE_KEYWORDS = ["tank", "armor", "armour", "crewman", "gunner", "driver"];
+    const SNIPER_SCOPE_SIGS = ["8x", "zf4", "zf 4", "zf41", "zf 41", "pu", "l42", "scope", "scoped", "sniper"];
+    const SNIPER_RIFLE_SIGS = ["kar98", "karabiner 98", "m1903", "springfield", "mosin", "gewehr 43", "svt 40", "enfield"];
     const ARTILLERY_KEYWORDS = [
         "howitzer", "artillery", "lefh", "155mm", "152mm", "150mm", "122mm", "105mm", "sfh",
         "m114", "m2a1", "mlrs", "katyusha", "pak 43",
@@ -125,6 +127,12 @@
     const isInfantryWeaponName = (nameLower) => INFANTRY_WEAPON_KEYWORDS.some(k => nameLower.includes(k));
     const isArmorWeaponName = (nameLower) =>
         ARMOR_KEYWORDS.some(k => nameLower.includes(k)) || CAT_MAP.armor.some(k => nameLower.includes(k));
+    const isSniperWeaponName = (nameLower) => {
+        if (CAT_MAP.sniper.some(k => nameLower.includes(k))) return true;
+        const hasScopeSig = SNIPER_SCOPE_SIGS.some(k => nameLower.includes(k));
+        const hasRifleSig = SNIPER_RIFLE_SIGS.some(k => nameLower.includes(k));
+        return hasScopeSig && hasRifleSig;
+    };
     const hasTankRole = (p) => {
         const roleText = `${p?.role || ""} ${p?.class || ""} ${p?.loadout || ""} ${p?.unit || ""} ${p?.squad || ""}`.toLowerCase();
         return TANK_ROLE_KEYWORDS.some(k => roleText.includes(k));
@@ -191,7 +199,7 @@
                 if (armorCrew && isArmorWeaponName(nl) && !isATWeaponName(nl)) { armorKills += val; return; }
                 if (CAT_MAP.mg.some(k => nl.includes(k)))      { mgKills += val; return; }
                 if (CAT_MAP.rocket.some(k => nl.includes(k)))  { rocketKills += val; return; }
-                if (CAT_MAP.sniper.some(k => nl.includes(k)))  { sniperKills += val; return; }
+                if (isSniperWeaponName(nl))                     { sniperKills += val; return; }
                 if (CAT_MAP.satchel.some(k => nl.includes(k))) { satchelKills += val; return; }
             });
             const totalKills    = Number(p.kills || 0);
