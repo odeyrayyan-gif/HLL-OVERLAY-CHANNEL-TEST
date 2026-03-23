@@ -12,7 +12,7 @@
             --accent:    #ac2e2e;
             --border:    1px solid rgba(255,255,255,0.1);
             --panel-width:  520px;
-            --panel-height: 585px;
+            --panel-height: 650px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -491,11 +491,11 @@
             const leftCrew  = allCrew
                 .filter(p => identifyTeam(p) === leftFaction)
                 .sort((a, b) => getArmorWeaponKills(b) - getArmorWeaponKills(a))
-                .slice(0, 8);
+                .slice(0, 9);
             const rightCrew = allCrew
                 .filter(p => identifyTeam(p) === rightFaction)
                 .sort((a, b) => getArmorWeaponKills(b) - getArmorWeaponKills(a))
-                .slice(0, 8);
+                .slice(0, 9);
 
             renderPanel("left-content",  "left-title",  "left-footer",  leftCrew,  leftColor,  leftName);
             renderPanel("right-content", "right-title", "right-footer", rightCrew, rightColor, rightName);
