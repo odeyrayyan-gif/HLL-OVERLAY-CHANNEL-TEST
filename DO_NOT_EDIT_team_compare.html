@@ -88,9 +88,14 @@
     const ARMOR_KEYWORDS = [
         "panzer", "tiger", "panther", "sherman", "stuart",
         "firefly", "puma", "lux", "marder", "halftrack", "greyhound",
-        "is-2", "is2", "t-34", "t34", "coaxial", "kwk",
+        "is-2", "is2", "t-34", "t34", "sd.kfz", "coaxial", "kwk",
+        "75mm cannon", "75mm m3", "76mm m1", "88mm kwk",
+        "qf 75mm", "qf 6 pounder", "qf 2 pounder",
         "17pdr", "17 pounder", "hull mg", "besa",
         "m4a3", "m4a1", "m5a1", "m8a1"
+    ];
+    const AT_INFANTRY_KEYWORDS = [
+        "bazooka", "panzerschreck", "piat", "panzerfaust", "anti_tank", "m5 at"
     ];
     const ARTILLERY_KEYWORDS = [
         "howitzer", "artillery", "lefh", "155mm", "152mm", "150mm", "122mm", "105mm", "sfh",
@@ -101,41 +106,44 @@
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
     };
+    const getVehicleKills = (p) => toNum(p?.v_kills ?? p?.vehicle_kills ?? p?.vehicles_destroyed ?? 0);
+    const isATWeaponName = (nameLower) => AT_INFANTRY_KEYWORDS.some(k => nameLower.includes(k));
+    const isArmorWeaponName = (nameLower) =>
+        ARMOR_KEYWORDS.some(k => nameLower.includes(k)) || CAT_MAP.armor.some(k => nameLower.includes(k));
+    const getArmorWeaponKills = (p) => {
+        let total = 0;
+        Object.entries(p?.weapons || {}).forEach(([name, val]) => {
+            const nl = name.toLowerCase();
+            if (ARTY_OVERRIDES.some(k => nl.includes(k))) return;
+            if (isATWeaponName(nl)) return;
+            if (isArmorWeaponName(nl)) total += toNum(val);
+        });
+        return total;
+    };
     function isArmorCrew(p) {
         if (!p || typeof p !== "object") return false;
         const weaponNames = Object.keys(p.weapons || {});
         const wAll = weaponNames.join(" ").toLowerCase();
+        const vehicleKills = getVehicleKills(p);
+        if (!weaponNames.length) return vehicleKills > 0;
         if (ARTILLERY_KEYWORDS.some(k => wAll.includes(k))) return false;
-        if (toNum(p.v_kills ?? p.vehicle_kills ?? p.vehicles_destroyed ?? 0) > 0) return true;
-        return weaponNames.some(w => {
-            const wl = w.toLowerCase();
-            return ARMOR_KEYWORDS.some(k => wl.includes(k));
-        });
+        const hasArmorWeapon = weaponNames.some(w => isArmorWeaponName(w.toLowerCase()));
+        const hasATWeapon = weaponNames.some(w => isATWeaponName(w.toLowerCase()));
+        if (hasATWeapon && !hasArmorWeapon) return false;
+        if (hasArmorWeapon) return true;
+        return vehicleKills > 0 && !hasATWeapon;
     }
 
     function getKills(players, cat) {
         let count = 0;
         players.forEach(p => {
+            const armorCrew = isArmorCrew(p);
             // Armor: prefer crew kills from tank weapons, fallback to vehicle kills.
             // This prevents the armor row showing 0/0 when v_kills is absent or inconsistent.
             if (cat === 'armor') {
-                if (!isArmorCrew(p)) return;
-                const vehicleKills = toNum(p.v_kills ?? p.vehicle_kills ?? p.vehicles_destroyed ?? 0);
-                if (vehicleKills > 0) {
-                    count += vehicleKills;
-                    return;
-                }
-                // Fallback for feeds where v_kills is absent but tank weapon kills exist.
-                let tankWeaponKills = 0;
-                Object.entries(p.weapons || {}).forEach(([name, val]) => {
-                    const nl = name.toLowerCase();
-                    if (ARTY_OVERRIDES.some(k => nl.includes(k))) return;
-                    const isTankWeapon = ARMOR_KEYWORDS.some(k => nl.includes(k)) || CAT_MAP.armor.some(k => nl.includes(k));
-                    if (isTankWeapon) {
-                        tankWeaponKills += toNum(val);
-                    }
-                });
-                count += tankWeaponKills;
+                if (!armorCrew) return;
+                const tankWeaponKills = getArmorWeaponKills(p);
+                count += tankWeaponKills > 0 ? tankWeaponKills : getVehicleKills(p);
                 return;
             }
             if (!p.weapons) {
@@ -144,21 +152,22 @@
                 return;
             }
             // Tally kills per weapon into categories
-            let artyKills = 0, mgKills = 0, rocketKills = 0, sniperKills = 0, satchelKills = 0;
+            let artyKills = 0, armorKills = 0, mgKills = 0, rocketKills = 0, sniperKills = 0, satchelKills = 0;
             Object.entries(p.weapons).forEach(([n, v]) => {
                 const nl = n.toLowerCase();
+                const val = toNum(v);
                 const isArty = ARTY_OVERRIDES.some(k => nl.includes(k));
-                if (isArty) { artyKills += v; return; }
-                if (CAT_MAP.mg.some(k => nl.includes(k)))      { mgKills += v; return; }
-                if (CAT_MAP.rocket.some(k => nl.includes(k)))  { rocketKills += v; return; }
-                if (CAT_MAP.sniper.some(k => nl.includes(k)))  { sniperKills += v; return; }
-                if (CAT_MAP.satchel.some(k => nl.includes(k))) { satchelKills += v; return; }
+                if (isArty) { artyKills += val; return; }
+                if (armorCrew && isArmorWeaponName(nl) && !isATWeaponName(nl)) { armorKills += val; return; }
+                if (CAT_MAP.mg.some(k => nl.includes(k)))      { mgKills += val; return; }
+                if (CAT_MAP.rocket.some(k => nl.includes(k)))  { rocketKills += val; return; }
+                if (CAT_MAP.sniper.some(k => nl.includes(k)))  { sniperKills += val; return; }
+                if (CAT_MAP.satchel.some(k => nl.includes(k))) { satchelKills += val; return; }
             });
             const totalKills    = Number(p.kills || 0);
-            const otherCatKills = artyKills + mgKills + rocketKills + sniperKills + satchelKills;
-            // Infantry = total kills minus kills from all other tracked categories
-            // Note: v_kills is vehicle destructions (not crew kills) so we do NOT subtract it
-            // Crew kills from vehicle weapons are already captured in weapon kill counts above
+            const otherCatKills = artyKills + armorKills + mgKills + rocketKills + sniperKills + satchelKills;
+            // Infantry = total kills minus kills from all other tracked categories.
+            // Armor kills are subtracted so hull/coaxial doesn't leak into infantry totals.
             const infantryKills = Math.max(0, totalKills - otherCatKills);
             if (cat === 'infantry')  { count += infantryKills; return; }
             if (cat === 'artillery') { count += artyKills; return; }

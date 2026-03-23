@@ -316,9 +316,14 @@
     const ARMOR_KEYWORDS = [
         "panzer", "tiger", "panther", "sherman", "stuart",
         "firefly", "puma", "lux", "marder", "halftrack", "greyhound",
-        "is-2", "is2", "t-34", "t34", "coaxial", "kwk",
+        "is-2", "is2", "t-34", "t34", "sd.kfz", "coaxial", "kwk",
+        "75mm cannon", "75mm m3", "76mm m1", "88mm kwk",
+        "qf 75mm", "qf 6 pounder", "qf 2 pounder",
         "17pdr", "17 pounder", "hull mg", "besa",
         "m4a3", "m4a1", "m5a1", "m8a1"
+    ];
+    const AT_INFANTRY_KEYWORDS = [
+        "bazooka", "panzerschreck", "piat", "panzerfaust", "anti_tank", "m5 at"
     ];
 
     // Words that mean it's ARTILLERY — never show these as armor
@@ -329,21 +334,27 @@
     ];
 
     function isArmorCrew(p) {
-        if (!p.weapons) return false;
-        const weaponNames = Object.keys(p.weapons);
+        const vehicleKills = Number(p?.v_kills ?? p?.vehicle_kills ?? p?.vehicles_destroyed ?? 0);
+        const weaponNames = Object.keys((p && p.weapons) || {});
+        if (!weaponNames.length) return Number.isFinite(vehicleKills) && vehicleKills > 0;
         const wAll = weaponNames.join(" ").toLowerCase();
 
         // Hard exclude if any weapon is artillery
         if (ARTILLERY_KEYWORDS.some(k => wAll.includes(k))) return false;
 
-        // Anyone with vehicle kills qualifies
-        if ((p.v_kills || 0) > 0) return true;
-
-        // Check each weapon for armor keywords
-        return weaponNames.some(w => {
+        const hasArmorWeapon = weaponNames.some(w => {
             const wl = w.toLowerCase();
             return ARMOR_KEYWORDS.some(k => wl.includes(k));
         });
+        const hasATWeapon = weaponNames.some(w => {
+            const wl = w.toLowerCase();
+            return AT_INFANTRY_KEYWORDS.some(k => wl.includes(k));
+        });
+
+        // Pure AT infantry should not appear in armor panels.
+        if (hasATWeapon && !hasArmorWeapon) return false;
+        if (hasArmorWeapon) return true;
+        return Number.isFinite(vehicleKills) && vehicleKills > 0 && !hasATWeapon;
     }
 
     function renderPanel(contentId, titleId, footerId, crews, color, factionName) {
