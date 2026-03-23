@@ -130,7 +130,7 @@ echo  ============================================================
 echo   INSTALLATION COMPLETE!
 echo  ============================================================
 echo.
-echo   Installed to: C:\HLL-Overlay
+echo   Installed to: C:\HLL-Overlay-TEST
 echo   Desktop shortcut: HLL Overlay TEST
 echo.
 echo   Starting HLL Overlay and opening hub...
