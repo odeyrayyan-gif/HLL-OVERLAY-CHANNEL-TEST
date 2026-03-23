@@ -133,6 +133,10 @@
         const hasRifleSig = SNIPER_RIFLE_SIGS.some(k => nameLower.includes(k));
         return hasScopeSig && hasRifleSig;
     };
+    const isSniperRole = (p) => {
+        const roleText = `${p?.role || ""} ${p?.class || ""} ${p?.loadout || ""} ${p?.unit || ""} ${p?.squad || ""}`.toLowerCase();
+        return roleText.includes("sniper") || roleText.includes("marksman");
+    };
     const hasTankRole = (p) => {
         const roleText = `${p?.role || ""} ${p?.class || ""} ${p?.loadout || ""} ${p?.unit || ""} ${p?.squad || ""}`.toLowerCase();
         return TANK_ROLE_KEYWORDS.some(k => roleText.includes(k));
@@ -203,6 +207,11 @@
                 if (CAT_MAP.satchel.some(k => nl.includes(k))) { satchelKills += val; return; }
             });
             const totalKills    = Number(p.kills || 0);
+            if (isSniperRole(p)) {
+                const alreadyClassified = artyKills + armorKills + mgKills + rocketKills + sniperKills + satchelKills;
+                const fallbackSniper = Math.max(0, totalKills - alreadyClassified);
+                sniperKills += fallbackSniper;
+            }
             const otherCatKills = artyKills + armorKills + mgKills + rocketKills + sniperKills + satchelKills;
             // Infantry = total kills minus kills from all other tracked categories.
             // Armor kills are subtracted so hull/coaxial doesn't leak into infantry totals.
