@@ -309,10 +309,6 @@
         <!-- URL input -->
         <label class="input-label">Find via F12 → Network tab → filter "get_live_game_stats" → copy the Request URL</label>
         <input type="text" id="api" placeholder="http://YOUR-SERVER-IP:PORT/api/get_live_game_stats" oninput="onApiInput()">
-        <label class="input-label" style="margin-top:10px;">Player Map API URL (optional) — use authenticated get_team_view URL if map shows Team view offline</label>
-        <input type="text" id="apiLogs" placeholder="http://YOUR-SERVER-IP:PORT/api/get_team_view?token=..." oninput="onApiLogsInput()">
-        <label class="input-label" style="margin-top:10px;">Player Map Cookie (optional) — paste Cookie header from CRCON request when endpoint is closed</label>
-        <input type="text" id="apiLogsCookie" placeholder="csrftoken=...; sessionid=..." oninput="onApiLogsCookieInput()">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.2);margin-top:7px;letter-spacing:1px;">
             SELECT a server to load it &nbsp;·&nbsp; EDIT the URL then 💾 Save to update it &nbsp;·&nbsp; ✕ to delete selected
         </div>
@@ -605,7 +601,6 @@
         { n: "Tank Scoreboard",      f: "DO_NOT_EDIT_tank_scoreboard.html",     icon: "🛡️",  w: 1920, h: 1080 },
         { n: "Melee Leaderboard",    f: "DO_NOT_EDIT_melee_leaderboard.html",   icon: "🔪",  w: 3840, h: 2160 },
         { n: "Message Banner",       f: "DO_NOT_EDIT_message_banner.html",      icon: "💬",  w: 1920, h: 1080 },
-        { n: "Player Map",           f: "DO_NOT_EDIT_player_map.html",          icon: "🗺️",  w: 3840, h: 2160 },
     ];
 
     let saveTimer = null;
@@ -622,8 +617,6 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     api_endpoint: document.getElementById('api').value.trim(),
-                    api_logs_endpoint: document.getElementById('apiLogs').value.trim(),
-                    api_logs_cookie: document.getElementById('apiLogsCookie').value.trim(),
                     swap_sides:   currentSwap
                 })
             });
@@ -779,15 +772,6 @@
         saveTimer = setTimeout(() => saveConfig('apiHint'), 600);
     }
 
-    function onApiLogsInput() {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => saveConfig('apiHint'), 600);
-    }
-    function onApiLogsCookieInput() {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => saveConfig('apiHint'), 600);
-    }
-
     function setSwap(val) {
         currentSwap = val;
         document.getElementById('pill-standard').className = 'toggle-pill' + (!val ? ' selected-allies' : '');
@@ -891,8 +875,6 @@
             const res  = await fetch(`${SERVER}/config`);
             const data = await res.json();
             document.getElementById('api').value    = data.api_endpoint || '';
-            document.getElementById('apiLogs').value = data.api_logs_endpoint || '';
-            document.getElementById('apiLogsCookie').value = data.api_logs_cookie || '';
             document.getElementById('player').value = data.player       || '';
             currentSwap = data.swap_sides === true;
             document.getElementById('pill-standard').className = 'toggle-pill' + (!currentSwap ? ' selected-allies' : '');

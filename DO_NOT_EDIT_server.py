@@ -4,7 +4,7 @@ Serves all HTML files and handles config read/write for the hub.
 Run via start.bat — do not close the terminal window while streaming.
 """
 
-import json, os, threading, socket, urllib.request, urllib.parse, urllib.error, shutil, sys
+import json, os, threading, socket, urllib.request, shutil, sys
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 # Always run from the folder this script lives in
@@ -142,77 +142,6 @@ CONFIG_FILE  = "DO_NOT_EDIT_settings.json"
 PLAYER_FILE  = "DO_NOT_EDIT_player.txt"
 PORT         = 3000
 
-def dedupe_keep_order(items):
-    out = []
-    seen = set()
-    for item in items:
-        if not item or item in seen:
-            continue
-        seen.add(item)
-        out.append(item)
-    return out
-
-def with_cache_buster(url):
-    parsed = urllib.parse.urlparse(url)
-    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-    query.append(("t", str(os.times()[4])))
-    new_query = urllib.parse.urlencode(query, doseq=True)
-    return urllib.parse.urlunparse(parsed._replace(query=new_query))
-
-def endpoint_looks_like(endpoint, targets):
-    try:
-        path = urllib.parse.urlparse(endpoint).path.lower()
-        return any(t.lower() in path for t in targets)
-    except:
-        return False
-
-def build_api_variant_url(live_stats_endpoint, target_name):
-    try:
-        parsed = urllib.parse.urlparse(live_stats_endpoint)
-        parts = parsed.path.split("/")
-        target = str(target_name or "").lstrip("/").lower()
-        idx = next((i for i, p in enumerate(parts) if p.lower() == "get_live_game_stats"), -1)
-        if idx >= 0:
-            parts[idx] = target
-        elif len(parts) > 1:
-            parts[-1] = target
-        else:
-            return ""
-        new_path = "/".join(parts)
-        return urllib.parse.urlunparse(parsed._replace(path=new_path))
-    except:
-        return ""
-
-def build_variant_candidates(endpoint_seed, targets):
-    variants = [build_api_variant_url(endpoint_seed, t) for t in targets]
-    if endpoint_looks_like(endpoint_seed, targets):
-        return dedupe_keep_order([endpoint_seed] + variants)
-    return dedupe_keep_order(variants)
-
-def fetch_json_url(url, cookie_header=""):
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json, text/plain, */*"
-    }
-    if cookie_header:
-        headers["Cookie"] = cookie_header
-    req = urllib.request.Request(with_cache_buster(url), headers=headers)
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read().decode())
-
-def fetch_first_ok_json(url_candidates, cookie_header=""):
-    last_error = "no candidate url"
-    for raw in url_candidates:
-        if not raw:
-            continue
-        try:
-            return fetch_json_url(raw, cookie_header)
-        except urllib.error.HTTPError as e:
-            last_error = f"HTTP {e.code}"
-        except Exception as e:
-            last_error = str(e)
-    raise Exception(last_error)
-
 class HLLHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
@@ -319,62 +248,6 @@ class HLLHandler(SimpleHTTPRequestHandler):
                 self.send_json({"result": None, "error": str(e)})
             return
 
-        # ── /player_map_data — proxy team-view/gamestate with optional auth cookie ──
-        if path == "/player_map_data":
-            try:
-                cfg = self.read_config()
-                endpoint = cfg.get("api_endpoint", "")
-                logs_endpoint = cfg.get("api_logs_endpoint", "")
-                logs_cookie = (cfg.get("api_logs_cookie", "") or "").strip()
-
-                endpoint_seeds = dedupe_keep_order([logs_endpoint, endpoint])
-                if not endpoint_seeds:
-                    self.send_json({"ok": False, "error": "NO_API_ENDPOINT"}, 400)
-                    return
-
-                team_targets = ["get_team_view", "get_teamview", "team_view"]
-                tv_candidates = []
-                for seed in endpoint_seeds:
-                    tv_candidates.extend(build_variant_candidates(seed, team_targets))
-                tv_candidates = dedupe_keep_order(tv_candidates)
-                tv_data = fetch_first_ok_json(tv_candidates, logs_cookie)
-                tv_result = tv_data.get("result", tv_data) if isinstance(tv_data, dict) else {}
-                teams_root = tv_result.get("teams", tv_result) if isinstance(tv_result, dict) else {}
-
-                allied_data = {}
-                axis_data = {}
-                if isinstance(teams_root, dict):
-                    allied_data = teams_root.get("allies") or teams_root.get("allied") or teams_root.get("us") or {}
-                    axis_data   = teams_root.get("axis") or teams_root.get("germany") or teams_root.get("ger") or {}
-
-                map_name = "UNKNOWN MAP"
-                game_targets = ["get_gamestate", "get_game_state", "gamestate"]
-                gs_candidates = []
-                for seed in endpoint_seeds:
-                    gs_candidates.extend(build_variant_candidates(seed, game_targets))
-                gs_candidates = dedupe_keep_order(gs_candidates)
-                try:
-                    gs_data = fetch_first_ok_json(gs_candidates, logs_cookie)
-                    gs_result = gs_data.get("result", gs_data) if isinstance(gs_data, dict) else {}
-                    if isinstance(gs_result, dict):
-                        if isinstance(gs_result.get("map"), dict) and gs_result["map"].get("pretty_name"):
-                            map_name = str(gs_result["map"]["pretty_name"]).upper()
-                        elif isinstance(gs_result.get("current_map"), dict) and gs_result["current_map"].get("pretty_name"):
-                            map_name = str(gs_result["current_map"]["pretty_name"]).upper()
-                        elif gs_result.get("pretty_name"):
-                            map_name = str(gs_result["pretty_name"]).upper()
-                except:
-                    pass
-
-                self.send_json({
-                    "ok": True,
-                    "map_name": map_name,
-                    "allied": allied_data if isinstance(allied_data, dict) else {},
-                    "axis": axis_data if isinstance(axis_data, dict) else {}
-                })
-            except Exception as e:
-                self.send_json({"ok": False, "error": str(e)}, 502)
-            return
         # ── Serve static files normally ──
         super().do_GET()
 
@@ -432,7 +305,7 @@ class HLLHandler(SimpleHTTPRequestHandler):
             with open(CONFIG_FILE, "r") as f:
                 return json.load(f)
         except:
-            return {"api_endpoint": "", "api_logs_endpoint": "", "api_logs_cookie": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}
+            return {"api_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}
 
     def write_config(self, data):
         existing = self.read_config()
@@ -470,7 +343,7 @@ if __name__ == "__main__":
     # Make sure config and player files exist
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w") as f:
-            json.dump({"api_endpoint": "", "api_logs_endpoint": "", "api_logs_cookie": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}, f, indent=2)
+            json.dump({"api_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}, f, indent=2)
     if not os.path.exists(PLAYER_FILE):
         with open(PLAYER_FILE, "w") as f:
             f.write("")
