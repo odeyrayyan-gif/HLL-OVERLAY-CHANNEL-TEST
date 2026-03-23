@@ -447,6 +447,53 @@ async function pollConfig() {
     } catch(e) {}
 }
 
+function withCacheBuster(urlStr) {
+    const u = new URL(urlStr);
+    u.searchParams.set('t', Date.now().toString());
+    return u.toString();
+}
+
+function buildApiVariantUrl(liveStatsEndpoint, targetName) {
+    try {
+        const u = new URL(liveStatsEndpoint);
+        const parts = u.pathname.split('/');
+        const target = String(targetName || '').replace(/^\//, '').toLowerCase();
+
+        // Typical CRCON path: /api/get_live_game_stats
+        const idx = parts.findIndex(p => p.toLowerCase() === 'get_live_game_stats');
+        if (idx >= 0) {
+            parts[idx] = target;
+            u.pathname = parts.join('/');
+            return u.toString();
+        }
+
+        // Fallback: replace trailing segment with desired endpoint.
+        if (parts.length > 1) {
+            parts[parts.length - 1] = target;
+            u.pathname = parts.join('/');
+            return u.toString();
+        }
+        return '';
+    } catch {
+        return '';
+    }
+}
+
+async function fetchFirstOk(urlCandidates) {
+    let lastStatus = '';
+    for (const raw of urlCandidates) {
+        if (!raw) continue;
+        try {
+            const res = await fetch(withCacheBuster(raw), { cache: 'no-store' });
+            if (res.ok) return await res.json();
+            lastStatus = `${res.status}`;
+        } catch (e) {
+            lastStatus = e.message || 'network error';
+        }
+    }
+    throw new Error(lastStatus ? `Team view offline (${lastStatus})` : 'Team view offline');
+}
+
 async function update() {
     const statusEl  = document.getElementById('statusBar');
     const mapNameEl = document.getElementById('mapName');
@@ -460,39 +507,50 @@ async function update() {
             return;
         }
 
-        // Derive base URL from api_endpoint
-        const url = new URL(cfg.api_endpoint);
-        const base = url.origin;
         const swapped = cfg.swap_sides;
         const alliedName = cfg.allied_faction || 'ALLIES';
 
         // Fetch gamestate for map name
         let mapName = 'UNKNOWN MAP';
         try {
-            const gsRes = await fetch(base + GAMESTATE_SUFFIX + '?t=' + Date.now(), { cache: 'no-store' });
-            if (gsRes.ok) {
+            const gsCandidates = [
+                buildApiVariantUrl(cfg.api_endpoint, 'get_gamestate'),
+                buildApiVariantUrl(cfg.api_endpoint, 'get_game_state'),
+                buildApiVariantUrl(cfg.api_endpoint, 'gamestate'),
+            ];
+            for (const gsUrl of gsCandidates) {
+                if (!gsUrl) continue;
+                const gsRes = await fetch(withCacheBuster(gsUrl), { cache: 'no-store' });
+                if (!gsRes.ok) continue;
                 const gs = await gsRes.json();
                 const result = gs.result || gs;
-                if (result.map && result.map.pretty_name) {
+                if (result?.map?.pretty_name) {
                     mapName = result.map.pretty_name.toUpperCase();
-                } else if (result.current_map && result.current_map.pretty_name) {
+                    break;
+                } else if (result?.current_map?.pretty_name) {
                     mapName = result.current_map.pretty_name.toUpperCase();
-                } else if (result.pretty_name) {
+                    break;
+                } else if (result?.pretty_name) {
                     mapName = result.pretty_name.toUpperCase();
+                    break;
                 }
             }
         } catch(e) {}
         mapNameEl.textContent = mapName;
 
         // Fetch team view for positions and squads
-        const tvRes = await fetch(base + TEAMVIEW_SUFFIX + '?t=' + Date.now(), { cache: 'no-store' });
-        if (!tvRes.ok) throw new Error('Team view offline');
-        const tvData = await tvRes.json();
+        const tvCandidates = [
+            buildApiVariantUrl(cfg.api_endpoint, 'get_team_view'),
+            buildApiVariantUrl(cfg.api_endpoint, 'get_teamview'),
+            buildApiVariantUrl(cfg.api_endpoint, 'team_view'),
+        ];
+        const tvData = await fetchFirstOk(tvCandidates);
         const result = tvData.result || tvData;
 
         // Extract allied and axis data
-        const alliedData = result.allies || result.allied || {};
-        const axisData   = result.axis   || {};
+        const teamsRoot = result.teams || result;
+        const alliedData = teamsRoot.allies || teamsRoot.allied || teamsRoot.us || {};
+        const axisData   = teamsRoot.axis   || teamsRoot.germany || teamsRoot.ger || {};
 
         // Flatten all players for map drawing
         const allPlayers = [];
