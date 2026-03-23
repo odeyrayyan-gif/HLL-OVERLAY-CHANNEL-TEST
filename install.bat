@@ -10,7 +10,7 @@ echo  ============================================================
 echo.
 
 set INSTALL_DIR=C:\HLL-Overlay-TEST
-set GITHUB=https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-TEST/main
+set GITHUB=https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-CHANNEL-TEST/main
 set BACKUP_DIR=%TEMP%\HLL-Overlay-Backup
 
 :: ── Check if this is a fresh install or reinstall ────────────
