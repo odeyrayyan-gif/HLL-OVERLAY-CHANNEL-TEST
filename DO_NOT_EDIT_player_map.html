@@ -436,7 +436,7 @@ function renderSquads(squads, elementId, color) {
 }
 
 // ── Main update ──
-let cachedConfig = { api_endpoint: '', swap_sides: false, allied_faction: 'ALLIES' };
+let cachedConfig = { api_endpoint: '', api_logs_endpoint: '', swap_sides: false, allied_faction: 'ALLIES' };
 
 async function pollConfig() {
     try {
@@ -494,6 +494,26 @@ async function fetchFirstOk(urlCandidates) {
     throw new Error(lastStatus ? `Team view offline (${lastStatus})` : 'Team view offline');
 }
 
+function dedupe(arr) {
+    const out = [];
+    const seen = new Set();
+    arr.forEach(v => {
+        if (!v || seen.has(v)) return;
+        seen.add(v);
+        out.push(v);
+    });
+    return out;
+}
+
+function endpointLooksLike(endpoint, targets) {
+    try {
+        const path = new URL(endpoint).pathname.toLowerCase();
+        return targets.some(t => path.includes(t.toLowerCase()));
+    } catch {
+        return false;
+    }
+}
+
 async function update() {
     const statusEl  = document.getElementById('statusBar');
     const mapNameEl = document.getElementById('mapName');
@@ -509,15 +529,16 @@ async function update() {
 
         const swapped = cfg.swap_sides;
         const alliedName = cfg.allied_faction || 'ALLIES';
+        const endpointSeeds = dedupe([cfg.api_logs_endpoint, cfg.api_endpoint].filter(Boolean));
 
         // Fetch gamestate for map name
         let mapName = 'UNKNOWN MAP';
         try {
-            const gsCandidates = [
-                buildApiVariantUrl(cfg.api_endpoint, 'get_gamestate'),
-                buildApiVariantUrl(cfg.api_endpoint, 'get_game_state'),
-                buildApiVariantUrl(cfg.api_endpoint, 'gamestate'),
-            ];
+            const gsTargets = ['get_gamestate', 'get_game_state', 'gamestate'];
+            const gsCandidates = dedupe(endpointSeeds.flatMap(seed => {
+                const variants = gsTargets.map(t => buildApiVariantUrl(seed, t));
+                return endpointLooksLike(seed, gsTargets) ? [seed, ...variants] : variants;
+            }));
             for (const gsUrl of gsCandidates) {
                 if (!gsUrl) continue;
                 const gsRes = await fetch(withCacheBuster(gsUrl), { cache: 'no-store' });
@@ -539,11 +560,11 @@ async function update() {
         mapNameEl.textContent = mapName;
 
         // Fetch team view for positions and squads
-        const tvCandidates = [
-            buildApiVariantUrl(cfg.api_endpoint, 'get_team_view'),
-            buildApiVariantUrl(cfg.api_endpoint, 'get_teamview'),
-            buildApiVariantUrl(cfg.api_endpoint, 'team_view'),
-        ];
+        const tvTargets = ['get_team_view', 'get_teamview', 'team_view'];
+        const tvCandidates = dedupe(endpointSeeds.flatMap(seed => {
+            const variants = tvTargets.map(t => buildApiVariantUrl(seed, t));
+            return endpointLooksLike(seed, tvTargets) ? [seed, ...variants] : variants;
+        }));
         const tvData = await fetchFirstOk(tvCandidates);
         const result = tvData.result || tvData;
 
@@ -590,7 +611,7 @@ async function update() {
     } catch(e) {
         mapStatus.className = 'map-status offline';
         mapStatus.textContent = 'SIGNAL LOST';
-        statusEl.textContent = `ERROR: ${e.message}`;
+        statusEl.textContent = `ERROR: ${e.message}${String(e.message).includes('401') ? ' · set Player Map API URL in Hub (authenticated get_team_view URL)' : ''}`;
     }
 }
 
