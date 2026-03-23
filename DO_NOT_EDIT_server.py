@@ -12,7 +12,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # ── AUTO-UPDATER ──────────────────────────────────────────────────────────────
-GITHUB_RAW   = "https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-CHANNEL-TEST/main/"
+GITHUB_RAW   = "https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-CHANNEL-TEST/streamer-stable-20260323/"
 VERSION_FILE = "version.txt"
 
 UPDATABLE_FILES = [
