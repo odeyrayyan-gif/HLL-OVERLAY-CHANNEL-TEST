@@ -134,28 +134,60 @@
 
     // Weapons containing these are ALWAYS artillery — never armor/infantry
     const ARTY_OVERRIDES = ["howitzer", "150mm", "105mm", "155mm", "152mm", "122mm", "lefh", "sfh", "artillery", "brumm", "stuh", "strumpanzer"];
+    const TANK_SIGS = [
+        "tiger", "panzer", "panther", "puma", "luchs", "lux", "marder", "sd.kfz",
+        "sherman", "stuart", "greyhound", "jumbo", "m4a3", "m4a1", "m5a1", "m8", "m8a1",
+        "firefly", "cromwell", "crusader", "churchill", "tetrarch", "daimler",
+        "is-1", "is-2", "is2", "t-34", "t34", "t-70", "ba-10",
+        "kwk", "coaxial", "hull mg", "besa", "17 pounder", "17pdr",
+        "qf 75mm", "qf 6 pounder", "qf 2 pounder", "75mm m3", "76mm m1",
+        "76mm zis", "76mm f-34", "88mm", "75mm", "50mm", "37mm", "45mm"
+    ];
+    const AT_SIGS = [
+        "bazooka", "panzerschreck", "piat", "panzerfaust",
+        "zis-3", "zis3", "pak40", "pak 40", "anti_tank", "m5 at"
+    ];
+    const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
 
     function getKills(players, cat) {
         let count = 0;
         players.forEach(p => {
-            // Armor: only count v_kills from actual tank crew (not AT infantry)
+            // Armor: prefer crew kills from tank weapons, fallback to vehicle kills.
+            // This prevents the armor row showing 0/0 when v_kills is absent or inconsistent.
             if (cat === 'armor') {
-                if ((p.v_kills || 0) > 0 && p.weapons) {
-                    const wKeys = Object.keys(p.weapons).join(' ').toLowerCase();
-                    const TANK_SIGS = ['tiger','panzer','panther','puma','luchs','marder',
-                        'sherman','stuart','greyhound','jumbo',
-                        'firefly','cromwell','crusader','churchill','tetrarch','daimler','honey',
-                        'is-1','is-2','t-34','t34','t-70','ba-10',
-                        'sd.kfz','m4a3','m5a1','m8',
-                        '75mm kwk','76mm m1','88mm kwk','122mm','50mm kwk',
-                        '20mm kwk','17 pounder','76mm zis','76mm f-34',
-                        '37mm','45mm','qf 75mm','qf 6 pounder','qf 2 pounder'];
-                    const AT_SIGS = ['bazooka','panzerschreck','piat','panzerfaust',
-                        'zis-3','pak40','anti_tank','m5 at'];
-                    const isAtInfantry = AT_SIGS.some(k => wKeys.includes(k));
-                    const isTankCrew   = TANK_SIGS.some(k => wKeys.includes(k));
-                    if (isTankCrew && !isAtInfantry) count += (p.v_kills || 0);
+                const vehicleKills = toNum(p.v_kills ?? p.vehicle_kills ?? p.vehicles_destroyed ?? 0);
+                const weaponEntries = Object.entries(p.weapons || {});
+                if (!weaponEntries.length) {
+                    count += vehicleKills;
+                    return;
                 }
+
+                let tankWeaponKills = 0;
+                let hasTankWeapon = false;
+                let hasATWeapon = false;
+
+                weaponEntries.forEach(([name, val]) => {
+                    const nl = name.toLowerCase();
+                    if (AT_SIGS.some(k => nl.includes(k))) {
+                        hasATWeapon = true;
+                        return;
+                    }
+                    if (ARTY_OVERRIDES.some(k => nl.includes(k))) return;
+                    const isTankWeapon = TANK_SIGS.some(k => nl.includes(k)) || CAT_MAP.armor.some(k => nl.includes(k));
+                    if (isTankWeapon) {
+                        hasTankWeapon = true;
+                        tankWeaponKills += toNum(val);
+                    }
+                });
+
+                // Pure AT infantry should not be counted as armor.
+                if (hasATWeapon && !hasTankWeapon) return;
+
+                const armorScore = tankWeaponKills > 0 ? tankWeaponKills : vehicleKills;
+                count += armorScore;
                 return;
             }
             if (!p.weapons) {
