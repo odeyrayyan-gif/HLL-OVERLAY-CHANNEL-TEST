@@ -33,6 +33,21 @@ UPDATABLE_FILES = [
     "start.bat",
     "README.txt",
 ]
+REMOVED_FILES = [
+    "DO_NOT_EDIT_player_map.html",
+]
+
+def remove_deprecated_files():
+    removed = []
+    for fname in REMOVED_FILES:
+        try:
+            if os.path.exists(fname):
+                os.remove(fname)
+                removed.append(fname)
+        except Exception as e:
+            print(f"  [!] Failed to remove deprecated file {fname}: {e}")
+    if removed:
+        print(f"  Removed deprecated files: {', '.join(removed)}")
 
 def get_local_version():
     try:
@@ -63,6 +78,7 @@ def download_file(filename):
         return False
 
 def check_for_updates():
+    remove_deprecated_files()
     print("  Checking for updates...")
     local   = get_local_version()
     remote  = get_remote_version()
