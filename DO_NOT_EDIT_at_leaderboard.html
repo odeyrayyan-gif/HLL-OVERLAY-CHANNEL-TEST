@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HLL Top 5 AT Players</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: rgba(7, 10, 15, 0.98);
+            --allies: #00a2ff;
+            --axis: #ff3c00;
+            --accent: #ac2e2e; /* Matched to Code 1 & 2 accent */
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        html, body { 
+            margin: 0; padding: 0; width: 3840px; height: 2160px; 
+            background: transparent !important; color: white; 
+            font-family: 'Oswald', sans-serif;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden !important; 
+        }
+
+        .leaderboard-card {
+            width: 1400px; background: var(--bg); border: 2px solid var(--border);
+            border-radius: 40px; padding: 60px; box-shadow: 0 50px 100px rgba(0,0,0,0.9);
+            backdrop-filter: blur(25px);
+            border-left: 15px solid var(--accent);
+            border-right: 15px solid var(--accent);
+        }
+
+        .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid var(--border); padding-bottom: 30px; }
+        .header h1 { margin: 0; font-size: 65px; text-transform: uppercase; letter-spacing: 12px; color: var(--accent); font-weight: 700; }
+        
+        .player-row {
+            display: grid; 
+            grid-template-columns: 90px 1fr 240px 240px; 
+            align-items: center;
+            padding: 35px; margin-bottom: 15px; background: rgba(255,255,255,0.03);
+            border-radius: 10px; border-left: 18px solid #333;
+        }
+        
+        /* Team Border Colors */
+        .axis { border-left-color: var(--axis); }
+        .allies { border-left-color: var(--allies); }
+        .empty-slot { opacity: 0.15; border-left-color: #222; }
+
+        .p-rank { font-size: 36px; color: rgba(255,255,255,0.2); font-weight: 700; }
+        .p-name { font-size: 42px; font-weight: 700; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+        .p-side-label { font-size: 16px; text-transform: uppercase; color: var(--accent); opacity: 0.8; margin-top: 5px; font-weight: 700; }
+
+        .stat-box { text-align: center; border-left: 2px solid rgba(255,255,255,0.05); }
+        .stat-val { font-size: 75px; font-weight: 700; display: block; line-height: 1; }
+        .stat-label { font-size: 16px; text-transform: uppercase; opacity: 0.5; letter-spacing: 2px; margin-top: 10px; display: block; font-weight: 700; }
+        
+        #status { text-align: center; font-size: 20px; color: var(--accent); margin-top: 35px; font-family: monospace; letter-spacing: 3px; font-weight: 700; }
+        .status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; transition: background 0.3s; }
+        .online { background: #00ff00; box-shadow: 0 0 10px #00ff00; }
+        .offline { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
+        #last-updated { opacity: 0.5; font-size: 14px; margin-left: 20px; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="leaderboard-card">
+    <div class="header"><h1>TOP 5 ANTI-TANK</h1></div>
+    <div id="content"></div>
+    <div id="status">
+        <span id="dot" class="status-dot"></span>
+        <span id="status-text">INITIALIZING...</span>
+        <span id="last-updated"></span>
+    </div>
+</div>
+
+<script>
+const CONFIG_URL = "http://localhost:3000/config";
+// Synced Keys from Code 1 & 2
+const AT_KEYS = ["bazooka", "panzerschreck", "piat", "panzerfaust"];
+const AXIS_SIGS = ["kar98", "mp40", "mg34", "mg42", "stg44", "fg42", "gewehr", "zf41", "p38", "luger", "walther", "stielhandgranate", "tiger", "panzer", "puma", "lux", "marder", "lefh", "pak40", "panzerfaust"];
+
+async function fetchNoCache(url) {
+    const sep = url.includes("?") ? "&" : "?";
+    return fetch(url + sep + "t=" + Date.now(), { cache: "no-store" });
+}
+async function getConfig() {
+    return fetch("http://localhost:3000/config").then(r => r.json());
+}
+
+function render(hunters) {
+    let html = "";
+    for (let i = 0; i < 5; i++) {
+        const h = hunters[i];
+        if (h) {
+            html += `
+            <div class="player-row ${h.side}">
+                <div class="p-rank">0${i+1}</div>
+                <div>
+                    <div class="p-name" style="color:${h.side === 'allies' ? 'var(--allies)' : 'var(--axis)'}">${h.name}</div>
+                    <div class="p-side-label">${h.displaySide} AT SPECIALIST</div>
+                </div>
+                <div class="stat-box"><span class="stat-val">${h.tanks}</span><span class="stat-label">Vehicles</span></div>
+                <div class="stat-box"><span class="stat-val" style="color:#aaa">${h.rockets}</span><span class="stat-label">Rocket Kills</span></div>
+            </div>`;
+        } else {
+            html += `
+            <div class="player-row empty-slot">
+                <div class="p-rank">0${i+1}</div>
+                <div><div class="p-name">AWAITING TARGET</div><div class="p-side-label">AWAITING DATA</div></div>
+                <div class="stat-box"><span class="stat-val">-</span><span class="stat-label">Vehicles</span></div>
+                <div class="stat-box"><span class="stat-val">-</span><span class="stat-label">Rocket Kills</span></div>
+            </div>`;
+        }
+    }
+    document.getElementById("content").innerHTML = html;
+}
+
+async function update() {
+    const dot = document.getElementById("dot");
+    const statusText = document.getElementById("status-text");
+    const timerText = document.getElementById("last-updated");
+    
+    try {
+        const settings = cachedConfig;
+        const endpoint = settings.api_endpoint;
+        const swapped = settings.swap_sides;
+        const alliedName = settings.allied_faction || "ALLIES";
+        const axisName   = "GERMANY";
+
+        if (!endpoint) {
+            statusText.innerText = "SETTINGS ERROR";
+            return;
+        }
+
+        const response = await fetchNoCache(endpoint);
+        if (!response.ok) throw new Error("API Offline");
+        
+        const data = await response.json();
+        const players = data?.result?.stats || [];
+
+        let hunters = players.map(p => {
+            let rocketKills = 0;
+            if (p.weapons) {
+                Object.entries(p.weapons).forEach(([w, count]) => {
+                    if (AT_KEYS.some(k => w.toLowerCase().includes(k))) rocketKills += count;
+                });
+            }
+            const tankKills = p.v_kills || 0;
+            
+            // Core Identity Logic
+            let detectedSide = "allies";
+            const wKeys = Object.keys(p.weapons || {}).join(" ").toLowerCase();
+            if ((p.team || "").toLowerCase().includes("axis") || (p.team || "").toLowerCase().includes("ger") || AXIS_SIGS.some(s => wKeys.includes(s))) {
+                detectedSide = "axis";
+            }
+
+            // Apply Swap Logic for Visual Consistency
+            let finalSide = detectedSide;
+            if (swapped) {
+                finalSide = (detectedSide === "allies") ? "axis" : "allies";
+            }
+
+            return { 
+                name: p.player, 
+                tanks: tankKills, 
+                rockets: rocketKills, 
+                side: finalSide,
+                displaySide: finalSide === "allies" ? (swapped ? axisName : alliedName) : (swapped ? alliedName : axisName)
+            };
+        })
+        .filter(h => h.tanks > 0 || h.rockets > 0)
+        .sort((a,b) => (b.tanks * 100 + b.rockets) - (a.tanks * 100 + a.rockets))
+        .slice(0, 5);
+
+        render(hunters);
+        
+        dot.className = "status-dot online";
+        statusText.innerText = "AT UPLINK ACTIVE";
+        timerText.innerText = "SYNCED: " + new Date().toLocaleTimeString();
+        
+    } catch (e) {
+        dot.className = "status-dot offline";
+        statusText.innerText = "UPLINK ERROR";
+    }
+}
+
+// Fast config poll
+let cachedConfig = { api_endpoint: "", swap_sides: false, allied_faction: "ALLIES" };
+let lastSwap = null;
+async function pollConfig() {
+    try {
+        const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) throw new Error("config " + r.status);
+        const cfg = await r.json();
+        if (cfg && cfg.api_endpoint !== undefined) {
+            cachedConfig = cfg;
+            if (lastSwap !== null && lastSwap !== cfg.swap_sides) { update(); }
+            lastSwap = cfg.swap_sides;
+        }
+    } catch(e) { console.warn("[HLL] pollConfig failed:", e.message); }
+}
+pollConfig().then(() => update());
+setInterval(pollConfig, 1000);
+setInterval(update, 4000);
+</script>
+</body>
+</html>

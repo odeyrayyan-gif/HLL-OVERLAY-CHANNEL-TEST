@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HLL Team Comparison</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: rgba(9, 12, 18, 0.95);
+            --allies: #00a2ff;
+            --axis: #ff3c00;
+            --accent: #ac2e2e;
+            --border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        html, body { 
+            margin: 0; padding: 0; width: 3840px; height: 2160px; 
+            background: transparent; color: white; font-family: 'Oswald', sans-serif;
+            overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .compare-card {
+            width: 1600px; background: var(--bg); border: var(--border);
+            border-radius: 20px; padding: 60px; backdrop-filter: blur(20px);
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+            border-left: 10px solid var(--accent); border-right: 10px solid var(--accent);
+        }
+        .header { display: flex; justify-content: center; align-items: center; margin-bottom: 50px; gap: 80px; }
+        .team-name { font-size: 70px; text-transform: uppercase; letter-spacing: 10px; font-weight: 700; }
+        .kd-mid { font-size: 40px; color: var(--accent); letter-spacing: 5px; font-weight: 700; }
+        
+        .stat-row { display: grid; grid-template-columns: 1fr 2fr 1fr; align-items: center; margin-bottom: 20px; }
+        .stat-value { font-size: 80px; font-weight: 700; }
+        .stat-name { text-align: center; font-size: 28px; text-transform: uppercase; color: rgba(255,255,255,0.4); letter-spacing: 4px; }
+        
+        .bar-container { grid-column: 1 / span 3; height: 16px; background: rgba(0,0,0,0.3); border-radius: 2px; display: flex; overflow: hidden; margin-bottom: 35px; }
+        .bar { height: 100%; transition: width 0.8s ease-in-out; }
+        
+        .bar-left-blue { background: var(--allies); box-shadow: 0 0 20px rgba(0, 162, 255, 0.4); }
+        .bar-right-red { background: var(--axis); box-shadow: 0 0 20px rgba(255, 60, 0, 0.4); }
+        
+        .left-text { color: var(--allies); text-align: left; }
+        .right-text { color: var(--axis); text-align: right; }
+        
+        #status-bar { margin-top: 30px; font-size: 24px; color: #ff9d00; text-transform: uppercase; letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+<div class="compare-card">
+    <div class="header">
+        <div id="left-label" class="team-name left-text">ALLIES</div>
+        <div class="kd-mid">KILLDIFF</div>
+        <div id="right-label" class="team-name right-text">AXIS</div>
+    </div>
+    <div id="stats-content"></div>
+</div>
+<div id="status-bar">SYNCING COMBAT DATA...</div>
+
+<script>
+    const CONFIG_URL = "http://localhost:3000/config";
+    const AXIS_SIGS = ["kar98", "mp40", "mg34", "mg42", "stg44", "fg42", "gewehr", "zf41", "p38", "luger", "walther", "stielhandgranate", "tiger", "panzer", "panther", "puma", "lux", "luchs", "marder", "sd.kfz", "lefh", "sfh", "150mm", "pak40", "panzerfaust", "brumm", "stuh", "strumpanzer"];
+    
+    const CAT_MAP = {
+        infantry: ["garand", "thompson", "carbine", "springfield", "m1911", "grease", "sten", "enfield", "mosin", "ppsh", "svt40", "tokarev", "nagant", "kar98", "mp40", "stg44", "gewehr", "p38", "luger", "walther", "stielhandgranate"],
+        mg: ["mg34", "mg42", "m1919", "browning", "lewis", "dp27"],
+        armor: ["tiger", "panzer", "panther", "puma", "lux", "luchs", "marder", "sd.kfz", "stuart", "sherman", "is2", "t34", "75mm", "76mm", "88mm"],
+        rocket: ["bazooka", "panzerschreck", "piat", "panzerfaust"],
+        artillery: ["artillery", "155mm", "150mm", "105mm", "lefh", "howitzer", "spa 105", "sfh"],
+        satchel: ["satchel", "explosive charge"],
+        sniper:  ["kar98k 8x", "karabiner 98 k 8x", "springfield m1903a3", "mosin nagant m91/30 pu", "gewehr 43 zf4", "svt 40 pu", "enfield l42", "zf41", "zf 41", "scoped"]
+    };
+
+    async function fetchNoCache(url) {
+        return fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" }).then(r => r.json());
+    }
+    async function getConfig() {
+        return fetch(CONFIG_URL).then(r => r.json());
+    }
+
+    function identifyTeam(p) {
+        const t = (p.team || "").toLowerCase();
+        if (t.includes("axis") || t.includes("ger")) return "Axis";
+        if (t.includes("allie") || t.includes("us") || t.includes("uk") || t.includes("soviet")) return "Allies";
+        return AXIS_SIGS.some(s => Object.keys(p.weapons || {}).join(" ").toLowerCase().includes(s)) ? "Axis" : "Allies";
+    }
+
+    // Weapons containing these are ALWAYS artillery — never armor/infantry
+    const ARTY_OVERRIDES = ["howitzer", "150mm", "105mm", "155mm", "152mm", "122mm", "lefh", "sfh", "artillery", "brumm", "stuh", "strumpanzer"];
+
+    function getKills(players, cat) {
+        let count = 0;
+        players.forEach(p => {
+            // Armor: only count v_kills from actual tank crew (not AT infantry)
+            if (cat === 'armor') {
+                if ((p.v_kills || 0) > 0 && p.weapons) {
+                    const wKeys = Object.keys(p.weapons).join(' ').toLowerCase();
+                    const TANK_SIGS = ['tiger','panzer','panther','puma','luchs','marder',
+                        'sherman','stuart','greyhound','jumbo',
+                        'firefly','cromwell','crusader','churchill','tetrarch','daimler','honey',
+                        'is-1','is-2','t-34','t34','t-70','ba-10',
+                        'sd.kfz','m4a3','m5a1','m8',
+                        '75mm kwk','76mm m1','88mm kwk','122mm','50mm kwk',
+                        '20mm kwk','17 pounder','76mm zis','76mm f-34',
+                        '37mm','45mm','qf 75mm','qf 6 pounder','qf 2 pounder'];
+                    const AT_SIGS = ['bazooka','panzerschreck','piat','panzerfaust',
+                        'zis-3','pak40','anti_tank','m5 at'];
+                    const isAtInfantry = AT_SIGS.some(k => wKeys.includes(k));
+                    const isTankCrew   = TANK_SIGS.some(k => wKeys.includes(k));
+                    if (isTankCrew && !isAtInfantry) count += (p.v_kills || 0);
+                }
+                return;
+            }
+            if (!p.weapons) {
+                // No weapon data — if infantry, use full kills as fallback
+                if (cat === 'infantry') count += (p.kills || 0);
+                return;
+            }
+            // Tally kills per weapon into categories
+            let artyKills = 0, mgKills = 0, rocketKills = 0, sniperKills = 0, satchelKills = 0;
+            Object.entries(p.weapons).forEach(([n, v]) => {
+                const nl = n.toLowerCase();
+                const isArty = ARTY_OVERRIDES.some(k => nl.includes(k));
+                if (isArty) { artyKills += v; return; }
+                if (CAT_MAP.mg.some(k => nl.includes(k)))      { mgKills += v; return; }
+                if (CAT_MAP.rocket.some(k => nl.includes(k)))  { rocketKills += v; return; }
+                if (CAT_MAP.sniper.some(k => nl.includes(k)))  { sniperKills += v; return; }
+                if (CAT_MAP.satchel.some(k => nl.includes(k))) { satchelKills += v; return; }
+            });
+            const totalKills    = Number(p.kills || 0);
+            const otherCatKills = artyKills + mgKills + rocketKills + sniperKills + satchelKills;
+            // Infantry = total kills minus kills from all other tracked categories
+            // Note: v_kills is vehicle destructions (not crew kills) so we do NOT subtract it
+            // Crew kills from vehicle weapons are already captured in weapon kill counts above
+            const infantryKills = Math.max(0, totalKills - otherCatKills);
+            if (cat === 'infantry')  { count += infantryKills; return; }
+            if (cat === 'artillery') { count += artyKills; return; }
+            if (cat === 'mg')        { count += mgKills; return; }
+            if (cat === 'rocket')    { count += rocketKills; return; }
+            if (cat === 'sniper')    { count += sniperKills; return; }
+            if (cat === 'satchel')   { count += satchelKills; return; }
+        });
+        return count;
+    }
+
+    // Fast config poll — runs every 1s so hub changes apply instantly
+    let cachedConfig = { api_endpoint: "", swap_sides: false, allied_faction: "ALLIES" };
+    let lastSwap = null;
+    async function pollConfig() {
+        try {
+            const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
+            if (!r.ok) throw new Error("config " + r.status);
+            const cfg = await r.json();
+            if (cfg && cfg.api_endpoint !== undefined) {
+                cachedConfig = cfg;
+                if (lastSwap !== null && lastSwap !== cfg.swap_sides) { update(); }
+                lastSwap = cfg.swap_sides;
+            }
+        } catch(e) { console.warn("[HLL] pollConfig failed:", e.message); }
+    }
+
+    async function update() {
+        try {
+            const settings = cachedConfig;
+            if (!settings.api_endpoint) { document.getElementById("status-bar").innerText = "AWAITING API — CHECK HUB"; return; }
+            const data = await fetchNoCache(settings.api_endpoint);
+            const players = data?.result?.stats || [];
+            const swapped = settings.swap_sides;
+            const alliedName = settings.allied_faction || "ALLIES";
+            const axisName   = "GERMANY";
+
+            const teams = { "Allies": [], "Axis": [] };
+            players.forEach(p => teams[identifyTeam(p)].push(p));
+
+            // Default: Allies Left, Axis Right
+            // Swapped: Axis Left, Allies Right
+            const leftTeamName  = swapped ? axisName   : alliedName;
+            const rightTeamName = swapped ? alliedName : axisName;
+            
+            document.getElementById("left-label").innerText = leftTeamName;
+            document.getElementById("right-label").innerText = rightTeamName;
+
+            const rows = [
+                { id: "infantry",  label: "Infantry"    },
+                { id: "sniper",    label: "Sniper"      },
+                { id: "mg",        label: "Machine Gun" },
+                { id: "armor",     label: "Armor"       },
+                { id: "rocket",    label: "Anti-Tank"   },
+                { id: "artillery", label: "Artillery"   },
+                { id: "satchel",   label: "Satchel"     }
+            ];
+
+            let html = "";
+            let totalL = 0, totalR = 0;
+
+            rows.forEach(row => {
+                const aVal = getKills(teams["Allies"], row.id);
+                const xVal = getKills(teams["Axis"], row.id);
+                const valL = swapped ? xVal : aVal;
+                const valR = swapped ? aVal : xVal;
+                totalL += valL;
+                totalR += valR;
+                const leftBarPct = (valL / (valL + valR || 1)) * 100;
+
+                html += `
+                    <div class="stat-row">
+                        <div class="stat-value left-text">${valL}</div>
+                        <div class="stat-name">${row.label}</div>
+                        <div class="stat-value right-text">${valR}</div>
+                        <div class="bar-container">
+                            <div class="bar bar-left-blue" style="width: ${leftBarPct}%"></div>
+                            <div class="bar bar-right-red" style="width: ${100 - leftBarPct}%"></div>
+                        </div>
+                    </div>`;
+            });
+
+            // Total kills row at bottom
+            html += `
+                <div class="stat-row" style="margin-top:20px; border-top: 2px solid rgba(255,255,255,0.08); padding-top:15px;">
+                    <div class="stat-value left-text" style="font-size:90px">${totalL}</div>
+                    <div class="stat-name" style="color:var(--accent); font-weight:700; font-size:22px;">TOTAL KILLS</div>
+                    <div class="stat-value right-text" style="font-size:90px">${totalR}</div>
+                </div>`;
+
+            document.getElementById("stats-content").innerHTML = html;
+            document.getElementById("status-bar").innerText = `SIGNAL SECURE | SYNCED: ${players.length} PLAYERS`;
+
+        } catch (e) { document.getElementById("status-bar").innerText = "SIGNAL LOST"; }
+    }
+    pollConfig().then(() => update());
+    setInterval(pollConfig, 1000);
+    setInterval(update, 4000);
+</script>
+</body>
+</html>

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HLL Kill Feed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            width: 1920px; height: 1080px;
+            background: transparent;
+            overflow: hidden;
+            font-family: 'Oswald', sans-serif;
+            color: white;
+        }
+
+        .feed {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 560px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: stretch;
+        }
+
+        .entry {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            background: rgba(7, 10, 16, 0.85);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 6px;
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            width: 100%;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        .entry.fade-out {
+            animation: fadeOut 0.4s ease forwards;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(40px); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { transform: translateX(0);    opacity: 1; max-height: 60px; margin-bottom: 0; }
+            to   { transform: translateX(20px); opacity: 0; max-height: 0;    margin-bottom: -6px; }
+        }
+
+        /* Left accent bar — killer's faction color */
+        .accent {
+            width: 4px;
+            align-self: stretch;
+            flex-shrink: 0;
+        }
+
+        .inner {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        /* Killer and victim get identical fixed widths — perfectly symmetric */
+        .killer {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 185px;
+            min-width: 0;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .weapon {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: rgba(255,255,255,0.45);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            background: rgba(255,255,255,0.05);
+            padding: 2px 8px;
+            border-radius: 3px;
+            flex-shrink: 0;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .arrow {
+            color: rgba(255,255,255,0.2);
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .victim {
+            font-size: 14px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.65);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 185px;
+            min-width: 0;
+            flex-shrink: 0;
+            text-align: left;
+        }
+
+        .debug {
+            position: absolute;
+            bottom: 20px;
+            right: 40px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="feed" id="feed"></div>
+<div class="debug" id="debug">Connecting...</div>
+
+<script>
+    const CONFIG_URL     = "http://localhost:3000/config";
+    const MAX_ENTRIES    = 5;
+    const POLL_MS        = 1000;
+    const ENTRY_LIFETIME = 10000;
+
+    const AXIS_SIGS = [
+        "kar98","mp40","mg34","mg42","stg44","fg42","gewehr","zf41",
+        "p38","luger","walther","stielhandgranate",
+        "tiger","panzer","puma","lux","marder","lefh","sfh","150mm","pak40","panzerfaust",
+        "howitzer","sfh","howitzer","sfh","brumm","stuh","strumpanzer","kv-2","m-10t","152mm","sherman spa"
+    ];
+
+    let cachedConfig = { api_endpoint: "", swap_sides: false, allied_faction: "ALLIES" };
+    let feedEntries  = [];
+
+    // Per-player previous state: { kills, deaths, team, topWeapon }
+    let prevStats    = {};
+    let initialized  = false;
+    let baselineCount = 0;
+
+    // ── Config polling ──
+    async function pollConfig() {
+        try {
+            const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
+            if (!r.ok) throw new Error(r.status);
+            const cfg = await r.json();
+            if (cfg && cfg.api_endpoint !== undefined) cachedConfig = cfg;
+        } catch(e) {}
+    }
+
+    // ── Identify team from player data ──
+    function identifyTeam(p) {
+        const t = (p.team || "").toLowerCase();
+        if (t.includes("axis") || t.includes("ger")) return "Axis";
+        if (t.includes("allie") || t.includes("us") || t.includes("uk") || t.includes("soviet")) return "Allies";
+        return AXIS_SIGS.some(s =>
+            Object.keys(p.weapons || {}).join(" ").toLowerCase().includes(s)
+        ) ? "Axis" : "Allies";
+    }
+
+    // ── Weapon abbreviation map ──
+    const WEAPON_ABBR = {
+        // German Infantry
+        "karabiner 98 k 8x":        "K98 8x",
+        "kar98k 8x":                "K98 8x",
+        "karabiner 98 k":           "K98",
+        "kar98k":                   "K98",
+        "kar98":                    "K98",
+        "mp 40":                    "MP40",
+        "mp40":                     "MP40",
+        "stg 44":                   "STG44",
+        "stg44":                    "STG44",
+        "fg 42":                    "FG42",
+        "fg42":                     "FG42",
+        "gewehr 43":                "G43",
+        "g43":                      "G43",
+        "mg 42":                    "MG42",
+        "mg42":                     "MG42",
+        "mg 34":                    "MG34",
+        "mg34":                     "MG34",
+        "walther p38":              "P38",
+        "p38":                      "P38",
+        "luger p08":                "Luger",
+        "luger":                    "Luger",
+        "panzerfaust":              "Pzfaust",
+        "panzerschreck":            "Schreck",
+        "stielhandgranate":         "Stickie",
+        "s mine":                   "S-Mine",
+        "smine":                    "S-Mine",
+        // US Infantry
+        "m1 garand":                "Garand",
+        "m1 carbine":               "Carbine",
+        "m1a1 thompson":            "Thompson",
+        "thompson":                 "Thompson",
+        "m1918a2 bar":              "BAR",
+        "bar":                      "BAR",
+        "m1919 browning":           "M1919",
+        "browning m1919":           "M1919",
+        "springfield m1903":        "Springfield",
+        "m1903":                    "Springfield",
+        "m1911":                    "M1911",
+        "bazooka":                  "Bazooka",
+        "m2 flamethrower":          "Flamer",
+        "flamethrower":             "Flamer",
+        "mk 2 grenade":             "Grenade",
+        "satchel charge":           "Satchel",
+        "satchel":                  "Satchel",
+        // British Infantry
+        "lee enfield no.4 mk i":    "Enfield",
+        "lee enfield":              "Enfield",
+        "enfield":                  "Enfield",
+        "sten gun mk ii":           "Sten",
+        "sten":                     "Sten",
+        "bren gun":                 "Bren",
+        "bren":                     "Bren",
+        "lewis gun":                "Lewis",
+        "piat":                     "PIAT",
+        "webley mk vi":             "Webley",
+        // Soviet Infantry
+        "mosin nagant m91/30":      "Mosin",
+        "mosin":                    "Mosin",
+        "ppsh 41":                  "PPSh",
+        "ppsh":                     "PPSh",
+        "svt 40":                   "SVT40",
+        "svt40":                    "SVT40",
+        "dp 27":                    "DP27",
+        "dp27":                     "DP27",
+        "nagant m1895":             "Nagant",
+        "tokarev tt33":             "Tokarev",
+        "tokarev":                  "Tokarev",
+        "rpg 43":                   "RPG43",
+        "rpg43":                    "RPG43",
+        // German Tanks
+        "75mm kwk 40 l/48":         "Panzer IV 75",
+        "75mm kwk37":               "Panzer IV 75",
+        "88mm kwk 36":              "Tiger 88",
+        "88mm kwk36":               "Tiger 88",
+        "88mm":                     "88mm",
+        "75mm kwk 42":              "Panther 75",
+        "50mm kwk 39":              "Puma 50",
+        "20mm kwk 30":              "Lux 20",
+        "tiger":                    "Tiger",
+        "panzer iv":                "Panzer IV",
+        "panther":                  "Panther",
+        "puma":                     "Puma",
+        "lux":                      "Lux",
+        "marder iii":               "Marder",
+        "pak 40":                   "PAK40",
+        "pak40":                    "PAK40",
+        // US Tanks
+        "75mm cannon m3":           "Sherman 75",
+        "75mm m3":                  "Sherman 75",
+        "76mm m1":                  "Sherman 76",
+        "76mm cannon":              "Sherman 76",
+        "76mm":                     "76mm",
+        "37mm m6":                  "Stuart 37",
+        "m4a3e8 sherman":           "Sherman",
+        "m4 sherman":               "Sherman",
+        "sherman":                  "Sherman",
+        "stuart":                   "Stuart",
+        // British Tanks
+        "17 pounder":               "Firefly 17pdr",
+        "17pdr":                    "Firefly 17pdr",
+        "firefly":                  "Firefly",
+        // Soviet Tanks
+        "122mm d-25t":              "IS-2 122",
+        "122mm":                    "IS-2 122",
+        "kv-2":                     "KV-2 SPA",
+        "m-10t":                    "KV-2 SPA",
+        "152mm":                    "KV-2 SPA",
+        "sherman spa":              "Sherman SPA",
+        "76mm zis-5":               "T34 76",
+        "t34":                      "T34",
+        "is 2":                     "IS-2",
+        "is2":                      "IS-2",
+        // Artillery
+        "155mm m114":               "155mm Arty",
+        "155mm":                    "155mm Arty",
+        "105mm m2a1":               "105mm Arty",
+        "105mm":                    "105mm Arty",
+        "lefh 18":                  "leFH18 Arty",
+        "stuh 43":                  "Brummbar SPA",
+        "brummbar":                 "Brummbar SPA",
+        "strumpanzer":              "Brummbar SPA",
+        "lefh":                     "leFH18 Arty",
+        "zis 3":                    "ZiS-3 Arty",
+        "zis3":                     "ZiS-3 Arty",
+        // Misc
+        "bombing run":              "Air Bomb",
+        "strafing run":             "Strafe",
+        "precision strike":         "Precision",
+        "mg nest":                  "MG Nest",
+        "halftrack":                "Halftrack",
+    };
+
+    function abbreviateWeapon(raw) {
+        if (!raw) return "Unknown";
+        const key = raw.toLowerCase().trim().replace(/_/g, " ");
+        // Direct match
+        if (WEAPON_ABBR[key]) return WEAPON_ABBR[key];
+        // Partial match — sort by key length descending so longer/more specific
+        // keys match before shorter generic ones (e.g. "75mm cannon" before "sherman")
+        const sorted = Object.entries(WEAPON_ABBR).sort((a, b) => b[0].length - a[0].length);
+        for (const [k, v] of sorted) {
+            if (key.includes(k)) return v;
+        }
+        // Fallback — cap at 18 chars
+        return key.length > 18 ? key.substring(0, 16) + "…" : key;
+    }
+
+    // ── Get weapon with biggest kill delta since last tick ──
+    function getTopWeapon(prevWeapons, currWeapons) {
+        if (!currWeapons) return "Unknown";
+        let topName = "Unknown", topDelta = 0;
+        for (const [name, count] of Object.entries(currWeapons)) {
+            const delta = count - (prevWeapons?.[name] || 0);
+            if (delta > topDelta) { topDelta = delta; topName = name; }
+        }
+        return abbreviateWeapon(topName);
+    }
+
+    // ── Add entry to feed ──
+    function addEntry(killer, victim, weapon, killerTeam) {
+        const swapped      = cachedConfig.swap_sides === true;
+        const isInLeftSlot = swapped ? (killerTeam === "Axis") : (killerTeam === "Allies");
+        const color        = isInLeftSlot ? "#00a2ff" : "#ff3c00";
+        const weaponClean  = weapon || "Unknown";
+
+        const el = document.createElement("div");
+        el.className = "entry";
+        el.innerHTML = `
+            <div class="accent" style="background:${color}"></div>
+            <div class="inner">
+                <div class="killer" style="color:${color}">${killer}</div>
+                <div class="weapon">${weaponClean}</div>
+                <div class="arrow">▶</div>
+                <div class="victim">${victim}</div>
+            </div>`;
+
+        const feed = document.getElementById("feed");
+        feed.insertBefore(el, feed.firstChild);
+        feedEntries.unshift(el);
+
+        while (feedEntries.length > MAX_ENTRIES) {
+            const old = feedEntries.pop();
+            old.classList.add("fade-out");
+            setTimeout(() => old.remove(), 400);
+        }
+
+        setTimeout(() => {
+            if (el.parentNode) {
+                el.classList.add("fade-out");
+                setTimeout(() => {
+                    el.remove();
+                    feedEntries = feedEntries.filter(e => e !== el);
+                }, 400);
+            }
+        }, ENTRY_LIFETIME);
+    }
+
+    // ── Main poll ──
+    async function poll() {
+        const api = cachedConfig.api_endpoint;
+        if (!api) {
+            document.getElementById("debug").textContent = "Awaiting API — check hub";
+            return;
+        }
+        try {
+            const sep = api.includes("?") ? "&" : "?";
+            const res = await fetch(api + sep + "t=" + Date.now(), { cache: "no-store" });
+            if (!res.ok) throw new Error(res.status);
+            const data    = await res.json();
+            const players = data?.result?.stats || [];
+
+            // ── Baseline: first 2 polls record state, fire nothing ──
+            if (!initialized) {
+                players.forEach(p => {
+                    prevStats[p.player] = {
+                        kills:   Number(p.kills  || 0),
+                        deaths:  Number(p.deaths || 0),
+                        weapons: { ...(p.weapons || {}) },
+                        team:    identifyTeam(p)
+                    };
+                });
+                baselineCount++;
+                if (baselineCount >= 2) initialized = true;
+                document.getElementById("debug").textContent = "Establishing baseline...";
+                return;
+            }
+
+            // ── Detect killers (kill delta > 0) ──
+            const killers = [];
+            // ── Detect victims (death delta > 0, opposite faction to killer) ──
+            const newDeaths = [];
+
+            players.forEach(p => {
+                const prev      = prevStats[p.player];
+                const currK     = Number(p.kills  || 0);
+                const currD     = Number(p.deaths || 0);
+                const currTeam  = identifyTeam(p);
+
+                if (!prev) {
+                    prevStats[p.player] = { kills: currK, deaths: currD, weapons: { ...(p.weapons || {}) }, team: currTeam };
+                    return;
+                }
+
+                const killDelta  = currK - prev.kills;
+                const deathDelta = currD - prev.deaths;
+
+                if (killDelta > 0) {
+                    const weapon = getTopWeapon(prev.weapons, p.weapons);
+                    for (let i = 0; i < Math.min(killDelta, 3); i++) {
+                        killers.push({ name: p.player, team: currTeam, weapon });
+                    }
+                }
+
+                if (deathDelta > 0) {
+                    for (let i = 0; i < Math.min(deathDelta, 3); i++) {
+                        newDeaths.push({ name: p.player, team: currTeam });
+                    }
+                }
+
+                prevStats[p.player] = { kills: currK, deaths: currD, weapons: { ...(p.weapons || {}) }, team: currTeam };
+            });
+
+            // ── Match killers to victims ──
+            // For each killer, find a victim from the opposing faction
+            // Remove matched victims so they aren't reused
+            const unmatchedDeaths = [...newDeaths];
+
+            killers.forEach(killer => {
+                // Prefer opposite faction victim
+                let victimIdx = unmatchedDeaths.findIndex(d => d.team !== killer.team);
+                // Fall back to any victim if no opposing faction found
+                if (victimIdx === -1) victimIdx = 0;
+
+                const victim = victimIdx >= 0 && unmatchedDeaths.length > 0
+                    ? unmatchedDeaths.splice(victimIdx, 1)[0].name
+                    : null;
+
+                addEntry(killer.name, victim || "Enemy", killer.weapon, killer.team);
+            });
+
+            document.getElementById("debug").textContent =
+                killers.length ? `+${killers.length} kills this tick` : "Watching...";
+
+        } catch(e) {
+            document.getElementById("debug").textContent = "Signal lost: " + e.message;
+        }
+    }
+
+    pollConfig().then(() => poll());
+    setInterval(pollConfig, 1000);
+    setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HLL HQ Command Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: rgba(12, 14, 18, 0.88); 
+            --allies: #00a2ff;
+            --axis: #ff3c00;
+            --accent: #ac2e2e;
+            --border: 1px solid rgba(255,255,255,0.1);
+            --panel-width: 500px; 
+            --panel-height: 585px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            width: 1920px; height: 1080px;
+            background: transparent;
+            font-family: 'Oswald', sans-serif;
+            color: #eee;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+        }
+        .panel {
+            width: var(--panel-width);
+            height: var(--panel-height);
+            background: var(--bg);
+            backdrop-filter: blur(15px);
+            border: var(--border);
+            display: flex;
+            flex-direction: column;
+            border-radius: 4px;
+        }
+        .left-side { border-left: 5px solid var(--accent); }
+        .right-side { border-right: 5px solid var(--accent); }
+        
+        .header { padding: 12px; background: rgba(255,255,255,0.03); border-bottom: var(--border); text-align: center; }
+        
+        /* Increased spacing for the KillDiff Header */
+        .header-title { 
+            font-size: 18px; 
+            text-transform: uppercase; 
+            font-weight: 700; 
+            display: flex; 
+            justify-content: center; 
+            gap: 40px; /* Further spacing between items */
+            align-items: center; 
+        }
+        
+        .team-label { letter-spacing: 4px; } /* Wider spacing for Faction names */
+        .kd-label { letter-spacing: 2px; }
+
+        .content { padding: 8px 20px; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-start; }
+
+        .k-row {
+            display: grid;
+            grid-template-columns: 30px 1fr 65px 65px 65px;
+            align-items: center;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            gap: 10px;
+        }
+        .k-row:last-child { border-bottom: none; }
+        .k-rank { color: rgba(255,255,255,0.2); font-size: 13px; font-weight: 700; }
+        .k-name { font-size: 16px; text-transform: uppercase; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        
+        .color-left { color: var(--allies); text-shadow: 0 0 8px rgba(0, 162, 255, 0.3); }
+        .color-right { color: var(--axis); text-shadow: 0 0 8px rgba(255, 60, 0, 0.3); }
+
+        .stat-box { text-align: center; }
+        .stat-val { font-size: 18px; font-weight: 700; color: #fff; line-height: 1; }
+        .stat-label { font-size: 8px; color: var(--accent); text-transform: uppercase; margin-top: 2px; font-weight: 700; }
+
+        .s-row { margin-bottom: 15px; }
+        .s-info { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 3px; }
+        .s-label { font-size: 12px; text-transform: uppercase; color: rgba(255,255,255,0.5); letter-spacing: 1.5px; }
+        .s-val { font-weight: 700; font-size: 18px; }
+
+        .bar-container { height: 10px; background: rgba(0,0,0,0.3); border-radius: 1px; overflow: hidden; display: flex; }
+        .bar { height: 100%; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .bar-left-blue { background: var(--allies); }
+        .bar-right-red { background: var(--axis); }
+
+        .footer { font-size: 10px; text-align: center; padding: 8px; color: #ff9d00; text-transform: uppercase; font-weight: 700; border-top: 1px solid rgba(255,255,255,0.03); }
+    </style>
+</head>
+<body>
+    <div class="panel left-side">
+        <div class="header"><div class="header-title" style="color:var(--accent); letter-spacing: 4px;">TOP 10 INFANTRY</div></div>
+        <div id="killers-list" class="content"></div>
+        <div class="footer">COMMAND FEED</div>
+    </div>
+    <div class="panel right-side">
+        <div class="header">
+            <div id="dynamic-header" class="header-title">
+                </div>
+        </div>
+        <div id="teams-list" class="content"></div>
+        <div class="footer" id="status-text">SIGNAL SECURE</div>
+    </div>
+
+<script>
+    const CONFIG_URL = "http://localhost:3000/config";
+    const AXIS_SIGS = ["kar98", "mp40", "mg34", "mg42", "stg44", "fg42", "gewehr", "zf41", "p38", "luger", "walther", "stielhandgranate", "tiger", "panzer", "panther", "puma", "lux", "luchs", "marder", "sd.kfz", "lefh", "sfh", "150mm", "pak40", "panzerfaust", "brumm", "stuh", "strumpanzer"];
+
+    const CAT_MAP = {
+        infantry: ["garand", "thompson", "carbine", "springfield", "m1911", "grease", "sten", "enfield", "mosin", "ppsh", "svt40", "tokarev", "nagant", "kar98", "mp40", "stg44", "gewehr", "p38", "luger", "walther", "stielhandgranate"],
+        mg: ["mg34", "mg42", "m1919", "browning", "lewis", "dp27"],
+        armor: ["tiger", "panzer", "panther", "puma", "lux", "luchs", "marder", "sd.kfz", "stuart", "sherman", "is2", "t34", "75mm", "76mm", "88mm"],
+        rocket: ["bazooka", "panzerschreck", "piat", "panzerfaust"],
+        artillery: ["artillery", "155mm", "150mm", "105mm", "lefh", "howitzer", "spa 105", "sfh"],
+        satchel: ["satchel", "explosive charge"],
+        sniper:  ["kar98k 8x", "karabiner 98 k 8x", "springfield m1903a3", "mosin nagant m91/30 pu", "gewehr 43 zf4", "svt 40 pu", "enfield l42", "zf41", "zf 41", "scoped"]
+    };
+
+    async function fetchNoCache(url) {
+        return fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" }).then(r => r.json());
+    }
+    async function getConfig() {
+        return fetch(CONFIG_URL).then(r => r.json());
+    }
+
+    function identifyTeam(p) {
+        const t = (p.team || "").toLowerCase();
+        if (t.includes("axis") || t.includes("ger")) return "Axis";
+        if (t.includes("allie") || t.includes("us") || t.includes("uk") || t.includes("soviet")) return "Allies";
+        return AXIS_SIGS.some(s => Object.keys(p.weapons || {}).join(" ").toLowerCase().includes(s)) ? "Axis" : "Allies";
+    }
+
+    // Weapons containing these are ALWAYS artillery — never armor/infantry
+    const ARTY_OVERRIDES = ["howitzer", "150mm", "105mm", "155mm", "152mm", "122mm", "lefh", "sfh", "artillery", "brumm", "stuh", "strumpanzer"];
+
+    function getKills(players, cat) {
+        let count = 0;
+        players.forEach(p => {
+            // Armor: only count v_kills from actual tank crew (not AT infantry)
+            if (cat === 'armor') {
+                if ((p.v_kills || 0) > 0 && p.weapons) {
+                    const wKeys = Object.keys(p.weapons).join(' ').toLowerCase();
+                    const TANK_SIGS = ['tiger','panzer','panther','puma','luchs','marder',
+                        'sherman','stuart','greyhound','jumbo',
+                        'firefly','cromwell','crusader','churchill','tetrarch','daimler','honey',
+                        'is-1','is-2','t-34','t34','t-70','ba-10',
+                        'sd.kfz','m4a3','m5a1','m8',
+                        '75mm kwk','76mm m1','88mm kwk','122mm','50mm kwk',
+                        '20mm kwk','17 pounder','76mm zis','76mm f-34',
+                        '37mm','45mm','qf 75mm','qf 6 pounder','qf 2 pounder'];
+                    const AT_SIGS = ['bazooka','panzerschreck','piat','panzerfaust',
+                        'zis-3','pak40','anti_tank','m5 at'];
+                    const isAtInfantry = AT_SIGS.some(k => wKeys.includes(k));
+                    const isTankCrew   = TANK_SIGS.some(k => wKeys.includes(k));
+                    if (isTankCrew && !isAtInfantry) count += (p.v_kills || 0);
+                }
+                return;
+            }
+            if (!p.weapons) {
+                // No weapon data — if infantry, use full kills as fallback
+                if (cat === 'infantry') count += (p.kills || 0);
+                return;
+            }
+            // Tally kills per weapon into categories
+            let artyKills = 0, mgKills = 0, rocketKills = 0, sniperKills = 0, satchelKills = 0;
+            Object.entries(p.weapons).forEach(([n, v]) => {
+                const nl = n.toLowerCase();
+                const isArty = ARTY_OVERRIDES.some(k => nl.includes(k));
+                if (isArty) { artyKills += v; return; }
+                if (CAT_MAP.mg.some(k => nl.includes(k)))      { mgKills += v; return; }
+                if (CAT_MAP.rocket.some(k => nl.includes(k)))  { rocketKills += v; return; }
+                if (CAT_MAP.sniper.some(k => nl.includes(k)))  { sniperKills += v; return; }
+                if (CAT_MAP.satchel.some(k => nl.includes(k))) { satchelKills += v; return; }
+            });
+            const totalKills    = Number(p.kills || 0);
+            const otherCatKills = artyKills + mgKills + rocketKills + sniperKills + satchelKills;
+            // Infantry = total kills minus kills from all other tracked categories
+            // Note: v_kills is vehicle destructions (not crew kills) so we do NOT subtract it
+            // Crew kills from vehicle weapons are already captured in weapon kill counts above
+            const infantryKills = Math.max(0, totalKills - otherCatKills);
+            if (cat === 'infantry')  { count += infantryKills; return; }
+            if (cat === 'artillery') { count += artyKills; return; }
+            if (cat === 'mg')        { count += mgKills; return; }
+            if (cat === 'rocket')    { count += rocketKills; return; }
+            if (cat === 'sniper')    { count += sniperKills; return; }
+            if (cat === 'satchel')   { count += satchelKills; return; }
+        });
+        return count;
+    }
+
+    let cachedConfig = { api_endpoint: "", swap_sides: false, allied_faction: "ALLIES" };
+    let lastSwap = null;
+    async function pollConfig() {
+        try {
+            const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
+            if (!r.ok) throw new Error("config " + r.status);
+            const cfg = await r.json();
+            if (cfg && cfg.api_endpoint !== undefined) {
+                cachedConfig = cfg;
+                if (lastSwap !== null && lastSwap !== cfg.swap_sides) {
+                    update();
+                }
+                lastSwap = cfg.swap_sides;
+            }
+        } catch(e) {
+            console.warn("[HLL] pollConfig failed:", e.message);
+        }
+    }
+
+
+    // Exclude armor crews and artillery gunners from infantry lists
+    const EXCLUDED_WEAPONS_LIST = [
+        'artillery','lefh','155mm','150mm','105mm','howitzer','pak40','anti_tank',
+        'zis3','88mm','75mm','76mm','tank','mine'
+    ];
+    function isArtyOrArmor(p) {
+        if ((p.v_kills || 0) > (Number(p.kills || 0) * 0.4)) return true;
+        if (!p.weapons) return false;
+        const top = Object.entries(p.weapons).sort((a,b) => b[1]-a[1])[0];
+        if (!top) return false;
+        return EXCLUDED_WEAPONS_LIST.some(ex => top[0].toLowerCase().includes(ex));
+    }
+    async function update() {
+        try {
+            const settings = cachedConfig;
+            if (!settings.api_endpoint) { document.getElementById("status-text").innerText = "AWAITING API — CHECK HUB"; return; }
+            const data = await fetchNoCache(settings.api_endpoint);
+            const players = data?.result?.stats || [];
+            const swapped = settings.swap_sides;
+            const alliedName = settings.allied_faction || "ALLIES";
+            const axisName   = "GERMANY";
+
+            // DYNAMIC HEADER UPDATE WITH SPACING
+            const leftTeamName  = swapped ? axisName   : alliedName;
+            const rightTeamName = swapped ? alliedName : axisName;
+            document.getElementById("dynamic-header").innerHTML = `
+                <span class="team-label" style="color:var(--allies)">${leftTeamName}</span>
+                <span class="kd-label" style="color:var(--accent)">KILLDIFF</span>
+                <span class="team-label" style="color:var(--axis)">${rightTeamName}</span>
+            `;
+
+            // TOP 10 LIST - COLORING BASED ON SWAP TOGGLE
+            const top10 = players
+                .filter(p => !isArtyOrArmor(p))
+                .sort((a, b) => b.kills - a.kills).slice(0, 10);
+
+            let kHtml = "";
+            top10.forEach((p, i) => {
+                const team = identifyTeam(p);
+                let colorClass = "";
+                if (!swapped) {
+                    colorClass = (team === "Allies") ? "color-left" : "color-right";
+                } else {
+                    colorClass = (team === "Axis") ? "color-left" : "color-right";
+                }
+
+                kHtml += `
+                    <div class="k-row">
+                        <div class="k-rank">${i+1}</div>
+                        <div class="k-name ${colorClass}">${p.player}</div>
+                        <div class="stat-box"><div class="stat-val">${p.combat}</div><div class="stat-label">CBT</div></div>
+                        <div class="stat-box"><div class="stat-val">${p.kills}</div><div class="stat-label">K</div></div>
+                        <div class="stat-box"><div class="stat-val">${p.deaths}</div><div class="stat-label">D</div></div>
+                    </div>`;
+            });
+            document.getElementById("killers-list").innerHTML = kHtml;
+
+            // KILLDIFF BARS
+            const teams = { "Allies": [], "Axis": [] };
+            players.forEach(p => teams[identifyTeam(p)].push(p));
+
+            let tHtml = "";
+            const categories = ["infantry", "sniper", "mg", "armor", "rocket", "artillery", "satchel"];
+            let totalA = 0, totalX = 0;
+
+            categories.forEach(cat => {
+                const aVal = getKills(teams["Allies"], cat);
+                const xVal = getKills(teams["Axis"], cat);
+                totalA += aVal; totalX += xVal;
+                
+                const total = (aVal + xVal) || 1;
+                const aPct = (aVal / total) * 100;
+
+                const leftScore = swapped ? xVal : aVal;
+                const rightScore = swapped ? aVal : xVal;
+
+                tHtml += `
+                    <div class="s-row">
+                        <div class="s-info">
+                            <span class="s-val" style="color: var(--allies)">${leftScore}</span>
+                            <span class="s-label">${cat}</span>
+                            <span class="s-val" style="color: var(--axis)">${rightScore}</span>
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar bar-left-blue" style="width:${swapped ? (100-aPct) : aPct}%"></div>
+                            <div class="bar bar-right-red" style="width:${swapped ? aPct : (100-aPct)}%"></div>
+                        </div>
+                    </div>`;
+            });
+
+            // Total Kills Row
+            const tLeftScore = swapped ? totalX : totalA;
+            const tRightScore = swapped ? totalA : totalX;
+            tHtml += `
+                <div class="s-row" style="margin-top:20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                    <div class="s-info">
+                        <span class="s-val" style="color: var(--allies)">${tLeftScore}</span>
+                        <span class="s-label" style="color:var(--accent); font-weight:700;">TOTAL KILLS</span>
+                        <span class="s-val" style="color: var(--axis)">${tRightScore}</span>
+                    </div>
+                </div>`;
+
+            document.getElementById("teams-list").innerHTML = tHtml;
+            document.getElementById("status-text").innerText = `SIGNAL SECURE | SYNCED: ${players.length}`;
+
+        } catch (e) { document.getElementById("status-text").innerText = "SIGNAL LOST"; }
+    }
+    pollConfig().then(() => update());
+    setInterval(pollConfig, 1000);
+    setInterval(update, 4000);
+</script>
+</body>
+</html>

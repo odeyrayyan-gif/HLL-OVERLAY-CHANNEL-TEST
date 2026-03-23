@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HLL Kill Streak Alerts</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: transparent; overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif; color: white;
+        }
+
+        .stage {
+            position: relative;
+            width: 1920px; height: 1080px;
+            pointer-events: none;
+        }
+
+        .alert-wrap {
+            position: absolute;
+            top: 70px; left: 200px;
+            width: 900px; height: 170px;
+        }
+
+        .alert {
+            position: absolute; inset: 0;
+            display: none; border-radius: 22px;
+            overflow: hidden; background: rgba(7, 10, 16, 0.90);
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+            backdrop-filter: blur(10px);
+            transform: translateY(-30px) scale(0.96); opacity: 0;
+        }
+
+        .alert.show {
+            display: block;
+            animation: alertInOut 5s ease forwards;
+        }
+
+        .alert::before {
+            content: ""; position: absolute; inset: 0;
+            background: 
+                radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 35%),
+                linear-gradient(to right, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
+            pointer-events: none;
+        }
+
+        .accent {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 10px;
+            background: linear-gradient(to bottom, #9fb0c5, #6a7787);
+        }
+
+        .alert.tier-3 .accent { background: linear-gradient(to bottom, #8dffcf, #1fba7e); }
+        .alert.tier-5 .accent { background: linear-gradient(to bottom, #ffe07d, #c58d18); }
+        .alert.tier-7 .accent { background: linear-gradient(to bottom, #ffad76, #cf531d); }
+        .alert.tier-10 .accent { background: linear-gradient(to bottom, #ff86e0, #9e3cff); }
+
+        .inner {
+            position: relative; z-index: 1; height: 100%;
+            display: grid; grid-template-columns: 110px 1fr 140px;
+            align-items: center; gap: 20px;
+            padding: 20px 24px 20px 30px;
+        }
+
+        .icon {
+            width: 90px; height: 90px; border-radius: 20px;
+            display: grid; place-items: center;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            font-size: 34px; font-weight: 900; letter-spacing: 1px;
+        }
+
+        .eyebrow {
+            font-size: 13px; font-weight: 800; letter-spacing: 1.7px;
+            text-transform: uppercase; color: rgba(255,255,255,0.62);
+            margin-bottom: 8px;
+        }
+
+        .title {
+            font-size: 40px; font-weight: 900;
+            text-transform: uppercase; line-height: 1; margin-bottom: 10px;
+        }
+
+        .detail {
+            font-size: 24px; font-weight: 700; color: rgba(255,255,255,0.90);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        .count { text-align: right; line-height: 1; }
+        .count-num { font-size: 58px; font-weight: 900; }
+        .count-label {
+            margin-top: 8px; font-size: 11px; font-weight: 800;
+            letter-spacing: 1.5px; text-transform: uppercase;
+            color: rgba(255,255,255,0.56);
+        }
+
+        .debug-pill {
+            position: absolute; right: 20px; bottom: 20px;
+            padding: 8px 12px; border-radius: 999px;
+            background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.10);
+            font-size: 12px; color: rgba(255,255,255,0.72);
+        }
+
+        @keyframes alertInOut {
+            0% { opacity: 0; transform: translateY(-30px) scale(0.96); }
+            10% { opacity: 1; transform: translateY(0) scale(1); }
+            80% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-12px) scale(0.985); }
+        }
+    </style>
+</head>
+<body>
+    <div class="stage">
+        <div class="alert-wrap">
+            <div id="alert" class="alert tier-3">
+                <div class="accent"></div>
+                <div class="inner">
+                    <div id="icon" class="icon">3X</div>
+                    <div>
+                        <div class="eyebrow">Hell Let Loose Live</div>
+                        <div id="title" class="title">Kill Streak</div>
+                        <div id="detail" class="detail">Player reached a streak</div>
+                    </div>
+                    <div class="count">
+                        <div id="countNum" class="count-num">3</div>
+                        <div class="count-label">In a row</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="debugPill" class="debug-pill">Waiting for API…</div>
+    </div>
+
+<script>
+const CONFIG_URL = "http://localhost:3000/config";
+const REFRESH_MS = 1000;
+const ALERT_THRESHOLDS = [5, 10, 15, 20, 25];
+
+const previousStats = {};
+const liveStreaks = {};
+const alreadyAlerted = new Set();
+const alertQueue = [];
+let showingAlert = false;
+let initialized = false;
+let baselineCount = 0; // Must complete 2 baseline polls before tracking
+
+async function fetchNoCache(url) {
+    const sep = url.includes("?") ? "&" : "?";
+    return fetch(url + sep + "t=" + Date.now(), { cache: "no-store" });
+}
+
+async function getEndpoint() {
+    try {
+        const r = await fetch("http://localhost:3000/config");
+        if (!r.ok) return "";
+        const settings = await r.json();
+        return settings.api_endpoint || "";
+    } catch { return ""; }
+}
+
+const ARTY_EXCLUSIONS = [
+    "howitzer", "artillery", "150mm", "155mm", "152mm", "122mm", "105mm", "lefh", "sfh",
+    "katyusha", "mlrs", "zis-3", "zis3", "brumm", "stuh", "strumpanzer"
+];
+
+function isArtillery(p) {
+    if (!p.weapons) return false;
+    return Object.keys(p.weapons).some(w =>
+        ARTY_EXCLUSIONS.some(k => w.toLowerCase().includes(k))
+    );
+}
+
+function getPlayers(data) {
+    const stats = data?.result?.stats;
+    if (!Array.isArray(stats)) return [];
+    return stats
+        .filter(p => !isArtillery(p))
+        .map(p => ({
+            name: p.player || "Unknown",
+            kills: Number(p.kills || 0),
+            deaths: Number(p.deaths || 0)
+        }));
+}
+
+function getTierClass(streak) {
+    if (streak >= 10) return "tier-10";
+    if (streak >= 7) return "tier-7";
+    if (streak >= 5) return "tier-5";
+    return "tier-3";
+}
+
+function getTitle(streak) {
+    if (streak >= 25) return "Godlike";
+    if (streak >= 20) return "Immortal";
+    if (streak >= 15) return "Unstoppable";
+    if (streak >= 10) return "Rampage";
+    if (streak >= 5) return "On Fire";
+    return "Kill Streak";
+}
+
+function enqueueAlert(name, streak) {
+    alertQueue.push({ name, streak });
+    processQueue();
+}
+
+function processQueue() {
+    if (showingAlert || alertQueue.length === 0) return;
+    showingAlert = true;
+    const next = alertQueue.shift();
+
+    const alertEl = document.getElementById("alert");
+    document.getElementById("icon").textContent = `${next.streak}X`;
+    document.getElementById("title").textContent = getTitle(next.streak);
+    document.getElementById("detail").textContent = `${next.name} reached a ${next.streak} kill streak`;
+    document.getElementById("countNum").textContent = next.streak;
+
+    alertEl.className = `alert ${getTierClass(next.streak)}`;
+    alertEl.classList.remove("show");
+    void alertEl.offsetWidth;
+    alertEl.classList.add("show");
+
+    setTimeout(() => {
+        showingAlert = false;
+        processQueue();
+    }, 5100);
+}
+
+async function poll() {
+    try {
+        const endpoint = cachedKSEndpoint;
+        if (!endpoint) {
+            document.getElementById("debugPill").textContent = "Awaiting API — check hub";
+            return;
+        }
+
+        const res = await fetchNoCache(endpoint);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        const players = getPlayers(data);
+
+        // ── BASELINE PHASE — record current state, fire nothing ──
+        // Run first 3 polls as baseline to avoid spam on load
+        if (!initialized) {
+            players.forEach(p => {
+                previousStats[p.name] = { kills: p.kills, deaths: p.deaths };
+                if (liveStreaks[p.name] === undefined) liveStreaks[p.name] = 0;
+            });
+            baselineCount++;
+            if (baselineCount >= 3) initialized = true;
+            document.getElementById("debugPill").textContent =
+                `Establishing baseline... (${baselineCount}/3)`;
+            return; // exit early — no tracking until baseline complete
+        }
+
+        // ── TRACKING PHASE ──
+        const changes = [];
+
+        for (const p of players) {
+            const prev = previousStats[p.name];
+
+            // New player joined mid-match — record baseline, skip this tick
+            if (!prev) {
+                previousStats[p.name] = { kills: p.kills, deaths: p.deaths };
+                liveStreaks[p.name] = 0;
+                continue;
+            }
+
+            const killDelta  = p.kills  - prev.kills;
+            const deathDelta = p.deaths - prev.deaths;
+
+            if (deathDelta > 0) {
+                liveStreaks[p.name] = 0;
+                for (const threshold of ALERT_THRESHOLDS) {
+                    alreadyAlerted.delete(`${p.name}:${threshold}`);
+                }
+                changes.push(`${p.name} died`);
+            }
+
+            if (killDelta > 0 && deathDelta === 0) {
+                liveStreaks[p.name] = (liveStreaks[p.name] || 0) + killDelta;
+                changes.push(`${p.name} +${killDelta} kill`);
+            }
+
+            if (killDelta > 0 && deathDelta > 0) {
+                // Died and got kills in same tick — count kills after respawn
+                liveStreaks[p.name] = killDelta;
+                changes.push(`${p.name} respawned +${killDelta}`);
+            }
+
+            const currStreak = liveStreaks[p.name] || 0;
+
+            // Fire alert for highest unalerted threshold crossed
+            for (const threshold of ALERT_THRESHOLDS) {
+                const key = `${p.name}:${threshold}`;
+                if (currStreak >= threshold && !alreadyAlerted.has(key)) {
+                    enqueueAlert(p.name, threshold);
+                    alreadyAlerted.add(key);
+                    break;
+                }
+            }
+
+            previousStats[p.name] = { kills: p.kills, deaths: p.deaths };
+        }
+
+        document.getElementById("debugPill").textContent =
+            changes.length ? changes.slice(0, 4).join(" • ") : "Watching live streaks";
+
+    } catch (err) {
+        document.getElementById("debugPill").textContent = `Error: ${err.message}`;
+    }
+}
+
+let cachedKSEndpoint = "";
+async function pollKSConfig() {
+    try {
+        const r = await fetch("http://localhost:3000/config?t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) throw new Error("config " + r.status);
+        const cfg = await r.json();
+        if (cfg && cfg.api_endpoint !== undefined) cachedKSEndpoint = cfg.api_endpoint || "";
+    } catch(e) {
+        console.warn("[HLL] pollKSConfig failed:", e.message);
+    }
+}
+pollKSConfig().then(() => poll());
+setInterval(pollKSConfig, 1000);
+setInterval(poll, REFRESH_MS);
+</script>
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HLL Tank Scoreboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: rgba(12, 14, 18, 0.88);
+            --blue-side: #00a2ff;
+            --red-side:  #ff3c00;
+            --accent:    #ac2e2e;
+            --border:    1px solid rgba(255,255,255,0.1);
+            --panel-width:  520px;
+            --panel-height: 585px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            width: 1920px; height: 1080px;
+            background: transparent;
+            font-family: 'Oswald', sans-serif;
+            color: #eee;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+        }
+
+        .panel {
+            width: var(--panel-width);
+            height: var(--panel-height);
+            background: var(--bg);
+            backdrop-filter: blur(15px);
+            border: var(--border);
+            display: flex;
+            flex-direction: column;
+            border-radius: 4px;
+        }
+        .left-side  { border-left:  5px solid var(--accent); }
+        .right-side { border-right: 5px solid var(--accent); }
+
+        .header {
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-title {
+            font-size: 16px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 4px;
+        }
+        .header-icon {
+            font-size: 20px;
+        }
+        .header-sub {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: rgba(255,255,255,0.3);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .content {
+            padding: 6px 16px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Column headers */
+        .col-header {
+            display: grid;
+            grid-template-columns: 28px 1fr 120px 60px 60px;
+            gap: 8px;
+            padding: 6px 0 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            margin-bottom: 4px;
+        }
+        .col-header span {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+        .col-header span:nth-child(2) { text-align: left; }
+
+        /* Crew rows */
+        .crew-row {
+            display: grid;
+            grid-template-columns: 28px 1fr 120px 60px 60px;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            gap: 8px;
+        }
+        .crew-row:last-child { border-bottom: none; }
+
+        .cr-rank {
+            font-size: 12px;
+            color: rgba(255,255,255,0.2);
+            font-weight: 700;
+            text-align: center;
+        }
+        .cr-name {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cr-tank {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(255,255,255,0.05);
+            padding: 2px 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+        }
+        .cr-stat {
+            text-align: center;
+        }
+        .cr-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+        .cr-label {
+            font-size: 8px;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-top: 1px;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .empty {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.15);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .footer {
+            font-size: 10px;
+            text-align: center;
+            padding: 8px;
+            color: #ff9d00;
+            text-transform: uppercase;
+            font-weight: 700;
+            border-top: 1px solid rgba(255,255,255,0.03);
+            font-family: 'Share Tech Mono', monospace;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel left-side" id="left-panel">
+        <div class="header">
+            <div>
+                <div class="header-title" id="left-title" style="color:var(--blue-side)">ALLIES ARMOR</div>
+                <div class="header-sub">Tank Crews</div>
+            </div>
+            <div class="header-icon">🛡️</div>
+        </div>
+        <div class="content" id="left-content"></div>
+        <div class="footer" id="left-footer">ARMOR FEED</div>
+    </div>
+
+    <div class="panel right-side" id="right-panel">
+        <div class="header">
+            <div>
+                <div class="header-title" id="right-title" style="color:var(--red-side)">AXIS ARMOR</div>
+                <div class="header-sub">Tank Crews</div>
+            </div>
+            <div class="header-icon">⚔️</div>
+        </div>
+        <div class="content" id="right-content"></div>
+        <div class="footer" id="right-footer">ARMOR FEED</div>
+    </div>
+
+<script>
+    const CONFIG_URL = "http://localhost:3000/config";
+
+    let cachedConfig = { api_endpoint: "", swap_sides: false, allied_faction: "ALLIES" };
+    let lastSwap     = null;
+
+    // ── Tank weapon signatures ──
+    const TANK_WEAPONS = [
+        // ── GERMAN ──
+        { key: "sd.kfz.181",        name: "Tiger I"       },  // Panzer VI Ausf. H1
+        { key: "sd.kfz.171",        name: "Panther"       },  // Panzer V Ausf. G
+        { key: "sd.kfz.161",        name: "Panzer IV"     },  // Panzer IV Ausf. G
+        { key: "sd.kfz.234",        name: "Puma"          },  // Recon
+        { key: "sd.kfz.121",        name: "Luchs"         },  // Panzer II Ausf. L
+        { key: "88mm kwk",          name: "Tiger I"       },
+        { key: "75mm kwk 42",       name: "Panther"       },
+        { key: "75mm kwk 40",       name: "Panzer IV"     },
+        { key: "75mm kwk37",        name: "Panzer IV"     },
+        { key: "50mm kwk 39",       name: "Puma"          },
+        { key: "20mm kwk",          name: "Luchs"         },
+        { key: "75mm pak",          name: "Marder"        },
+        { key: "pak 40",            name: "Marder"        },
+        // ── US ──
+        { key: "m4a3e2(76)",        name: "Jumbo 76"      },  // Heavy
+        { key: "m4a3e2",            name: "Jumbo 75"      },  // Heavy
+        { key: "m4a3",              name: "Sherman"       },  // Medium
+        { key: "m5a1",              name: "Stuart"        },  // Light
+        { key: "m8 greyhound",      name: "Greyhound"     },  // Recon
+        { key: "76mm m1",           name: "Jumbo 76"      },
+        { key: "75mm m3",           name: "Sherman"       },
+        { key: "75mm cannon",       name: "Sherman"       },
+        { key: "37mm",              name: "Stuart"        },
+        // ── SOVIET ──
+        { key: "is-1",              name: "IS-1"          },  // Heavy
+        { key: "t-34",              name: "T-34/76"       },  // Medium
+        { key: "t34",               name: "T-34/76"       },
+        { key: "t-70",              name: "T-70"          },  // Light
+        { key: "ba-10",             name: "BA-10"         },  // Recon
+        { key: "122mm",             name: "IS-1"          },
+        { key: "76mm zis",          name: "T-34/76"       },
+        { key: "76mm f-34",         name: "T-34/76"       },
+        { key: "45mm",              name: "T-70"          },
+        // ── BRITISH ──
+        { key: "churchill mk vii",  name: "Churchill VII" },  // Heavy
+        { key: "churchill mk iii",  name: "Churchill III" },  // Heavy
+        { key: "firefly",           name: "Firefly"       },  // Heavy
+        { key: "cromwell",          name: "Cromwell"      },  // Medium
+        { key: "crusader",          name: "Crusader"      },  // Medium
+        { key: "m3 stuart",         name: "Honey"         },  // Light
+        { key: "tetrarch",          name: "Tetrarch"      },  // Light
+        { key: "daimler",           name: "Daimler"       },  // Recon
+        { key: "17 pounder",        name: "Firefly"       },
+        { key: "17pdr",             name: "Firefly"       },
+        { key: "qf 75mm",           name: "Cromwell"      },
+        { key: "qf 6 pounder",      name: "Crusader"      },
+        { key: "qf 2 pounder",      name: "Tetrarch"      },
+    ];;
+
+    const AXIS_SIGS = [
+        "kar98","mp40","mg34","mg42","stg44","fg42","gewehr","zf41",
+        "p38","luger","walther","stielhandgranate",
+        "tiger","panzer","puma","lux","marder","lefh","pak40","panzerfaust",
+        "88mm","75mm kwk"
+    ];
+
+    function identifyTeam(p) {
+        const t = (p.team || "").toLowerCase();
+        if (t.includes("axis") || t.includes("ger")) return "Axis";
+        if (t.includes("allie") || t.includes("us") || t.includes("uk") || t.includes("soviet")) return "Allies";
+        return AXIS_SIGS.some(s =>
+            Object.keys(p.weapons || {}).join(" ").toLowerCase().includes(s)
+        ) ? "Axis" : "Allies";
+    }
+
+    function detectTankType(p) {
+        if (!p.weapons) return "Unknown";
+
+        // First pass: check TANK_WEAPONS lookup table (most accurate)
+        const wAll = Object.keys(p.weapons).join(" ").toLowerCase();
+        for (const t of TANK_WEAPONS) {
+            if (wAll.includes(t.key)) return t.name;
+        }
+
+        // Second pass: extract vehicle name from brackets e.g. "COAXIAL M1919 [M4A3 Sherman]"
+        for (const name of Object.keys(p.weapons)) {
+            const match = name.match(/\[([^\]]+)\]/);
+            if (match) {
+                // Got a bracketed vehicle name — clean it up
+                const vName = match[1].trim();
+                // Skip if it looks like a model number only (e.g. "[75mm]")
+                if (!/^\d+mm$/i.test(vName)) return vName.substring(0, 16);
+            }
+        }
+
+        // Third pass: look for known vehicle names anywhere in weapon strings
+        const VEHICLE_NAMES = [
+            "tiger","panther","panzer","sherman","stuart","firefly",
+            "puma","lux","marder","halftrack","greyhound","is-2","t-34"
+        ];
+        for (const name of Object.keys(p.weapons)) {
+            const nl = name.toLowerCase();
+            for (const v of VEHICLE_NAMES) {
+                if (nl.includes(v)) return v.charAt(0).toUpperCase() + v.slice(1);
+            }
+        }
+
+        // Final fallback — use coaxial weapon type to hint the vehicle class
+        if (wAll.includes("coaxial")) return "Tank (Coaxial)";
+        return "Unknown";
+    }
+
+    // Words that confirm it's a tank weapon
+    const ARMOR_KEYWORDS = [
+        "panzer", "tiger", "panther", "sherman", "stuart",
+        "firefly", "puma", "lux", "marder", "halftrack", "greyhound",
+        "is-2", "is2", "t-34", "t34", "coaxial", "kwk",
+        "17pdr", "17 pounder", "hull mg", "besa",
+        "m4a3", "m4a1", "m5a1", "m8a1"
+    ];
+
+    // Words that mean it's ARTILLERY — never show these as armor
+    const ARTILLERY_KEYWORDS = [
+        "howitzer", "artillery", "lefh", "155mm", "152mm", "150mm", "122mm", "105mm", "sfh", "sfh",
+        "m114", "m2a1", "mlrs", "katyusha", "pak 43",
+        "zis-3", "zis3", "brumm", "stuh", "strumpanzer", "kv-2", "m-10t", "sherman spa"
+    ];
+
+    function isArmorCrew(p) {
+        if (!p.weapons) return false;
+        const weaponNames = Object.keys(p.weapons);
+        const wAll = weaponNames.join(" ").toLowerCase();
+
+        // Hard exclude if any weapon is artillery
+        if (ARTILLERY_KEYWORDS.some(k => wAll.includes(k))) return false;
+
+        // Anyone with vehicle kills qualifies
+        if ((p.v_kills || 0) > 0) return true;
+
+        // Check each weapon for armor keywords
+        return weaponNames.some(w => {
+            const wl = w.toLowerCase();
+            return ARMOR_KEYWORDS.some(k => wl.includes(k));
+        });
+    }
+
+    function renderPanel(contentId, titleId, footerId, crews, color, factionName) {
+        document.getElementById(titleId).textContent  = `${factionName} ARMOR`;
+        document.getElementById(titleId).style.color  = color;
+        document.getElementById(footerId).textContent = `${crews.length} CREW ACTIVE`;
+
+        const el = document.getElementById(contentId);
+
+        if (crews.length === 0) {
+            el.innerHTML = '<div class="empty">No armor active</div>';
+            return;
+        }
+
+        const colHeader = `
+            <div class="col-header">
+                <span>#</span>
+                <span>Crew</span>
+                <span>Tank</span>
+                <span>V.KLS</span>
+                <span>INF</span>
+                <span>K/D</span>
+            </div>`;
+
+        const rows = crews.map((p, i) => {
+            const kills  = Number(p.kills  || 0);
+            const deaths = Number(p.deaths || 0);
+            const kd     = deaths > 0 ? (kills / deaths).toFixed(1) : kills;
+            const tank   = detectTankType(p);
+
+            return `
+            <div class="crew-row">
+                <div class="cr-rank">${i + 1}</div>
+                <div class="cr-name" style="color:${color}">${p.player}</div>
+                <div class="cr-tank">${tank}</div>
+                <div class="cr-stat">
+                    <div class="cr-val">${p.v_kills || 0}</div>
+                    <div class="cr-label">V.KLS</div>
+                </div>
+                <div class="cr-stat">
+                    <div class="cr-val">${kills}</div>
+                    <div class="cr-label">INF</div>
+                </div>
+                <div class="cr-stat">
+                    <div class="cr-val">${kd}</div>
+                    <div class="cr-label">K/D</div>
+                </div>
+            </div>`;
+        }).join('');
+
+        el.innerHTML = colHeader + rows;
+    }
+
+    async function pollConfig() {
+        try {
+            const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
+            if (!r.ok) throw new Error(r.status);
+            const cfg = await r.json();
+            if (cfg && cfg.api_endpoint !== undefined) {
+                cachedConfig = cfg;
+                if (lastSwap !== null && lastSwap !== cfg.swap_sides) update();
+                lastSwap = cfg.swap_sides;
+            }
+        } catch(e) {}
+    }
+
+    async function update() {
+        const api = cachedConfig.api_endpoint;
+        if (!api) {
+            document.getElementById("left-footer").textContent  = "AWAITING API — CHECK HUB";
+            document.getElementById("right-footer").textContent = "AWAITING API — CHECK HUB";
+            return;
+        }
+
+        try {
+            const sep = api.includes("?") ? "&" : "?";
+            const res = await fetch(api + sep + "t=" + Date.now(), { cache: "no-store" });
+            if (!res.ok) throw new Error(res.status);
+            const data    = await res.json();
+            const players = data?.result?.stats || [];
+
+            const swapped     = cachedConfig.swap_sides === true;
+            const alliedName  = cachedConfig.allied_faction || "ALLIES";
+            const axisName    = "GERMANY";
+            const leftColor   = "var(--blue-side)";
+            const rightColor  = "var(--red-side)";
+
+            // Left slot = Allied (standard) or Axis (swapped)
+            const leftFaction  = swapped ? "Axis"   : "Allies";
+            const rightFaction = swapped ? "Allies" : "Axis";
+            const leftName     = swapped ? axisName   : alliedName;
+            const rightName    = swapped ? alliedName : axisName;
+
+            // Filter to armor crews only, bucket by faction
+            const allCrew = players.filter(p => isArmorCrew(p));
+            const leftCrew  = allCrew
+                .filter(p => identifyTeam(p) === leftFaction)
+                .sort((a, b) => Number(b.kills || 0) - Number(a.kills || 0))
+                .slice(0, 8);
+            const rightCrew = allCrew
+                .filter(p => identifyTeam(p) === rightFaction)
+                .sort((a, b) => Number(b.kills || 0) - Number(a.kills || 0))
+                .slice(0, 8);
+
+            renderPanel("left-content",  "left-title",  "left-footer",  leftCrew,  leftColor,  leftName);
+            renderPanel("right-content", "right-title", "right-footer", rightCrew, rightColor, rightName);
+
+        } catch(e) {
+            document.getElementById("left-footer").textContent  = "SIGNAL LOST";
+            document.getElementById("right-footer").textContent = "SIGNAL LOST";
+        }
+    }
+
+    pollConfig().then(() => update());
+    setInterval(pollConfig, 1000);
+    setInterval(update, 4000);
+</script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HLL Player Spotlight</title>
+
+<style>
+    *{box-sizing:border-box;}
+
+    html,body{
+        margin:0;
+        padding:0;
+        width:100%;
+        height:100%;
+        background:transparent;
+        overflow:hidden;
+        font-family:Arial, Helvetica, sans-serif;
+        color:white;
+    }
+
+    .wrap{
+        width:1920px;
+        height:1080px;
+        position:relative;
+    }
+
+    .card{
+        position:absolute;
+        left:70px;
+        bottom:70px;
+        width:750px; 
+        border-radius:16px;
+        background:rgba(9,12,18,0.88);
+        border:1px solid rgba(255,255,255,0.12);
+        box-shadow:0 14px 40px rgba(0,0,0,0.36);
+        backdrop-filter:blur(8px);
+        display:none;
+    }
+
+    .inner{
+        padding:22px 22px 28px 22px;
+    }
+
+    .header{
+        display:flex;
+        justify-content:center; 
+        align-items:center;
+        margin-bottom:12px;
+    }
+
+    .title{
+        font-size:16px; 
+        font-weight:800;
+        letter-spacing:2px;
+        text-transform:uppercase;
+        color:rgba(255,255,255,0.70);
+    }
+
+    .name{
+        font-size:38px;
+        font-weight:900;
+        margin-bottom:16px;
+        text-align: center;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        width: 100%;
+    }
+
+    .stats{
+        display:grid;
+        grid-template-columns:repeat(5,1fr);
+        gap:10px;
+        margin-bottom: 15px;
+    }
+
+    .stat{
+        background:rgba(255,255,255,0.04);
+        border:1px solid rgba(255,255,255,0.07);
+        border-radius:10px;
+        padding:10px 8px;
+        text-align: center;
+    }
+
+    .weapon-feature {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center; 
+        text-align: center;     
+    }
+
+    .weapon-value {
+        font-size: 34px; 
+        font-weight: 900;
+        color: #ff9d00;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+    }
+
+    .value{
+        font-size:24px;
+        font-weight:900;
+        margin-bottom:4px;
+    }
+
+    .label{
+        font-size:9px;
+        letter-spacing:1px;
+        text-transform:uppercase;
+        color:rgba(255,255,255,0.55);
+    }
+
+    .status{
+        position:absolute;
+        left:70px;
+        bottom:70px;
+        width:700px;
+        padding:16px;
+        border-radius:12px;
+        background:rgba(9,12,18,0.88);
+        border:1px solid rgba(255,255,255,0.12);
+        font-size:18px;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+    <div id="status" class="status">
+        Loading player spotlight...
+    </div>
+
+    <div id="card" class="card">
+        <div class="inner">
+            <div class="header">
+                <div class="title">Player Spotlight</div>
+            </div>
+
+            <div id="playerName" class="name">Player</div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div id="kills" class="value">0</div>
+                    <div class="label">Kills</div>
+                </div>
+                <div class="stat">
+                    <div id="deaths" class="value">0</div>
+                    <div class="label">Deaths</div>
+                </div>
+                <div class="stat">
+                    <div id="kd" class="value">0</div>
+                    <div class="label">K/D</div>
+                </div>
+                <div class="stat">
+                    <div id="kpm" class="value">0.00</div>
+                    <div class="label">KPM</div>
+                </div>
+                <div class="stat">
+                    <div id="combat" class="value">0</div>
+                    <div class="label">Combat</div>
+                </div>
+            </div>
+
+            <div class="weapon-feature">
+                <div class="label" style="margin-bottom: 6px;">Most Used Weapon</div>
+                <div id="weaponName" class="weapon-value">-</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const CONFIG_URL = "http://localhost:3000/config";
+const PLAYER_URL = "http://localhost:3000/player";
+const REFRESH = 3000;
+
+const EXCLUDED_WEAPONS = [
+    'artillery', 'lefh_18', 'm1_155mm', 'pak40', 'm5_anti_tank', 'zis3',
+    'marder_iii', 'is2_122mm', 'tiger_88mm', 'panther_75mm', 'm4a3e8_76mm',
+    'm4a3e8_75mm', 'firefly_17pdr', 'stuart_37mm', 'puma_50mm', 'lux_20mm',
+    'brumm', 'stuh', 'strumpanzer', 'sfh', 'kv-2', 'm-10t', '152mm', '122mm', 'sherman spa'
+];
+
+function normalize(n){ return String(n||"").toLowerCase().trim(); }
+
+async function fetchNoCache(url){
+    const separator = url.includes("?") ? "&" : "?";
+    return fetch(url + separator + "t=" + Date.now(), {cache:"no-store"});
+}
+
+// Updated to read JSON for settings, but keep plain text for PLAYER_FILE
+async function getSettings() {
+    try {
+        const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) return null;
+        return await r.json();
+    } catch(e) { return null; }
+}
+
+async function getManualPlayer() {
+    try {
+        const r = await fetch(PLAYER_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) return "";
+        const d = await r.json();
+        return d.player || "";
+    } catch(e) { return ""; }
+}
+
+function getBestWeapon(p) {
+    if (!p.weapons || Object.keys(p.weapons).length === 0) return "None";
+    let topName = "None";
+    let topCount = -1;
+    for (const [name, count] of Object.entries(p.weapons)) {
+        const weaponKey = name.toLowerCase();
+        const isExcluded = EXCLUDED_WEAPONS.some(ex => weaponKey.includes(ex));
+        if (!isExcluded && count > topCount) {
+            topCount = count;
+            topName = name;
+        }
+    }
+    return topName.replace(/_/g, ' ');
+}
+
+function render(p){
+    const status=document.getElementById("status");
+    const card=document.getElementById("card");
+
+    const kills=Number(p.kills||0);
+    const deaths=Number(p.deaths||0);
+    const kd=deaths>0?(kills/deaths).toFixed(2):String(kills);
+    const kpm=Number(p.kills_per_minute||0).toFixed(2);
+    const combat=Number(p.combat||0);
+    const weapon=getBestWeapon(p);
+
+    document.getElementById("playerName").textContent=p.player||"Unknown";
+    document.getElementById("kills").textContent=kills;
+    document.getElementById("deaths").textContent=deaths;
+    document.getElementById("kd").textContent=kd;
+    document.getElementById("kpm").textContent=kpm;
+    document.getElementById("combat").textContent=combat;
+    document.getElementById("weaponName").textContent=weapon;
+
+    status.style.display="none";
+    card.style.display="block";
+}
+
+
+    // Exclude armor crews and artillery gunners from infantry lists
+    const EXCLUDED_WEAPONS_LIST = [
+        'artillery','lefh','155mm','152mm','150mm','122mm','105mm','howitzer','sfh','brumm','stuh','strumpanzer','pak40','anti_tank',
+        'zis3','88mm','75mm','76mm','tank','mine'
+    ];
+    function isArtyOrArmor(p) {
+        if ((p.v_kills || 0) > (Number(p.kills || 0) * 0.4)) return true;
+        if (!p.weapons) return false;
+        const top = Object.entries(p.weapons).sort((a,b) => b[1]-a[1])[0];
+        if (!top) return false;
+        return EXCLUDED_WEAPONS_LIST.some(ex => top[0].toLowerCase().includes(ex));
+    }
+async function update(){
+    const statusBox = document.getElementById("status");
+    try {
+        // 1. Use cached settings (polled every 1s)
+        const settings = cachedSettings;
+        if (!settings || !settings.api_endpoint) {
+            statusBox.style.display = "block";
+            statusBox.textContent = "Waiting for API — type it in the hub";
+            return;
+        }
+
+        // 2. Use cached player name (polled every 1s)
+        const manual = cachedPlayer;
+
+        // 3. Fetch Game Data using the endpoint from JSON
+        const res = await fetchNoCache(settings.api_endpoint);
+        if(!res.ok) {
+            statusBox.style.display = "block";
+            statusBox.textContent = "API Error: " + res.status;
+            return;
+        }
+
+        const data = await res.json();
+        const stats = data?.result?.stats;
+        if(!Array.isArray(stats)) return;
+
+        let player = null;
+        if(manual){
+            const n = normalize(manual);
+            // Smart match: exact > word boundary > starts-with > contains
+            const scored = stats
+                .map(p => {
+                    const pl = normalize(p.player);
+                    if (pl === n) return { p, score: 100 };
+                    if (pl.startsWith(n)) return { p, score: 90 };
+                    if (/(^|[\s|_.(\[])/.test(pl.slice(0, pl.indexOf(n) >= 0 ? pl.indexOf(n) : 0) + (pl.includes(n) ? pl[pl.indexOf(n)-1]||'' : ''))) return { p, score: 80 };
+                    if (pl.includes(n)) return { p, score: 50 };
+                    return { p, score: -1 };
+                })
+                .filter(x => x.score >= 0)
+                .sort((a, b) => b.score - a.score || b.p.kills - a.p.kills);
+            player = scored.length > 0 ? scored[0].p : null;
+            // If a name was typed but not found, show searching state — don't silently fallback
+            if (!player) {
+                statusBox.style.display = "block";
+                statusBox.textContent = `Searching for "${manual}"... (check spelling)`;
+                document.getElementById("card").style.display = "none";
+                return;
+            }
+        }
+        
+        // Fallback to top infantry killer only when no name is typed
+        // Exclude armor crews and artillery gunners
+        if(!player) {
+            const pool = stats.filter(p => !isArtyOrArmor(p));
+            player = [...(pool.length ? pool : stats)]
+                .sort((a,b)=>Number(b.kills||0)-Number(a.kills||0))[0];
+        }
+
+        if(player) render(player);
+
+    } catch(e) { 
+        statusBox.style.display = "block";
+        statusBox.textContent = "Connection Error. Check settings JSON URL.";
+    }
+}
+
+// Fast config + player poll — 1s
+let cachedSettings = null;
+let cachedPlayer = "";
+let lastPlayer = null;
+async function pollConfigAndPlayer() {
+    try {
+        const [cfgR, plrR] = await Promise.all([
+            fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" }),
+            fetch(PLAYER_URL + "?t=" + Date.now(), { cache: "no-store" })
+        ]);
+        if (cfgR.ok) cachedSettings = await cfgR.json();
+        const pd = plrR.ok ? await plrR.json() : {};
+        cachedPlayer = pd.player || "";
+        // Trigger immediate update when player name changes
+        if (lastPlayer !== null && lastPlayer !== cachedPlayer) {
+            update();
+        }
+        lastPlayer = cachedPlayer;
+    } catch(e) {}
+}
+pollConfigAndPlayer().then(() => update());
+setInterval(pollConfigAndPlayer, 1000);
+setInterval(update, REFRESH);
+</script>
+
+</body>
+</html>
