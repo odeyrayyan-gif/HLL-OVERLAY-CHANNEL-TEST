@@ -138,7 +138,7 @@
     const ARMOR_KEYWORDS = [
         "panzer", "tiger", "panther", "sherman", "stuart",
         "firefly", "puma", "lux", "marder", "halftrack", "greyhound",
-        "is-2", "is2", "t-34", "t34", "sd.kfz", "coaxial", "kwk",
+        "is-2", "is2", "t-34", "t34", "sd.kfz", "coaxial", "co-axial", "co axial", "coax", "kwk",
         "75mm cannon", "75mm m3", "76mm m1", "88mm kwk",
         "qf 75mm", "qf 6 pounder", "qf 2 pounder",
         "17pdr", "17 pounder", "hull mg", "besa",
@@ -177,7 +177,11 @@
         const vehicleKills = getVehicleKills(p);
         if (!weaponNames.length) return vehicleKills > 0;
         if (ARTILLERY_KEYWORDS.some(k => wAll.includes(k))) return false;
-        const hasArmorWeapon = weaponNames.some(w => isArmorWeaponName(w.toLowerCase()));
+        const hasArmorWeapon = weaponNames.some(w => {
+            const wl = w.toLowerCase();
+            if (isATWeaponName(wl)) return false;
+            return isArmorWeaponName(wl);
+        });
         const hasATWeapon = weaponNames.some(w => isATWeaponName(w.toLowerCase()));
         if (hasATWeapon && !hasArmorWeapon) return false;
         if (hasArmorWeapon) return true;
