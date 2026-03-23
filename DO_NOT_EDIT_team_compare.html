@@ -97,6 +97,7 @@
     const AT_INFANTRY_KEYWORDS = [
         "bazooka", "panzerschreck", "piat", "panzerfaust", "anti_tank", "m5 at"
     ];
+    const TANK_ROLE_KEYWORDS = ["tank", "armor", "armour", "crewman", "gunner", "driver"];
     const ARTILLERY_KEYWORDS = [
         "howitzer", "artillery", "lefh", "155mm", "152mm", "150mm", "122mm", "105mm", "sfh",
         "m114", "m2a1", "mlrs", "katyusha", "pak 43",
@@ -106,17 +107,28 @@
         const n = Number(v);
         return Number.isFinite(n) ? n : 0;
     };
+    const weaponKillValue = (raw) => {
+        if (typeof raw === "number" || typeof raw === "string") return toNum(raw);
+        if (raw && typeof raw === "object") {
+            return toNum(raw.kills ?? raw.kill ?? raw.count ?? raw.value ?? raw.total ?? 0);
+        }
+        return 0;
+    };
     const getVehicleKills = (p) => toNum(p?.v_kills ?? p?.vehicle_kills ?? p?.vehicles_destroyed ?? 0);
     const isATWeaponName = (nameLower) => AT_INFANTRY_KEYWORDS.some(k => nameLower.includes(k));
     const isArmorWeaponName = (nameLower) =>
         ARMOR_KEYWORDS.some(k => nameLower.includes(k)) || CAT_MAP.armor.some(k => nameLower.includes(k));
+    const hasTankRole = (p) => {
+        const roleText = `${p?.role || ""} ${p?.class || ""} ${p?.loadout || ""} ${p?.unit || ""} ${p?.squad || ""}`.toLowerCase();
+        return TANK_ROLE_KEYWORDS.some(k => roleText.includes(k));
+    };
     const getArmorWeaponKills = (p) => {
         let total = 0;
         Object.entries(p?.weapons || {}).forEach(([name, val]) => {
             const nl = name.toLowerCase();
             if (ARTY_OVERRIDES.some(k => nl.includes(k))) return;
             if (isATWeaponName(nl)) return;
-            if (isArmorWeaponName(nl)) total += toNum(val);
+            if (isArmorWeaponName(nl)) total += weaponKillValue(val);
         });
         return total;
     };
@@ -125,7 +137,7 @@
         const weaponNames = Object.keys(p.weapons || {});
         const wAll = weaponNames.join(" ").toLowerCase();
         const vehicleKills = getVehicleKills(p);
-        if (!weaponNames.length) return vehicleKills > 0;
+        if (!weaponNames.length) return vehicleKills > 0 && hasTankRole(p);
         if (ARTILLERY_KEYWORDS.some(k => wAll.includes(k))) return false;
         const hasArmorWeapon = weaponNames.some(w => {
             const wl = w.toLowerCase();
@@ -134,8 +146,7 @@
         });
         const hasATWeapon = weaponNames.some(w => isATWeaponName(w.toLowerCase()));
         if (hasATWeapon && !hasArmorWeapon) return false;
-        if (hasArmorWeapon) return true;
-        return vehicleKills > 0 && !hasATWeapon;
+        return hasArmorWeapon;
     }
 
     function getKills(players, cat) {
@@ -147,7 +158,13 @@
             if (cat === 'armor') {
                 if (!armorCrew) return;
                 const tankWeaponKills = getArmorWeaponKills(p);
-                count += tankWeaponKills > 0 ? tankWeaponKills : getVehicleKills(p);
+                // Only count actual tank-weapon kills when weapon breakdown exists.
+                // This prevents panzerschreck/kar98 spillover into armor totals.
+                if (Object.keys(p.weapons || {}).length) {
+                    count += tankWeaponKills;
+                } else {
+                    count += getVehicleKills(p);
+                }
                 return;
             }
             if (!p.weapons) {
@@ -159,7 +176,7 @@
             let artyKills = 0, armorKills = 0, mgKills = 0, rocketKills = 0, sniperKills = 0, satchelKills = 0;
             Object.entries(p.weapons).forEach(([n, v]) => {
                 const nl = n.toLowerCase();
-                const val = toNum(v);
+                const val = weaponKillValue(v);
                 const isArty = ARTY_OVERRIDES.some(k => nl.includes(k));
                 if (isArty) { artyKills += val; return; }
                 if (armorCrew && isArmorWeaponName(nl) && !isATWeaponName(nl)) { armorKills += val; return; }
