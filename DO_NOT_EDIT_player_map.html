@@ -270,8 +270,7 @@
 
 <script>
 const CONFIG_URL       = "http://localhost:3000/config";
-const GAMESTATE_SUFFIX = "/api/get_gamestate";
-const TEAMVIEW_SUFFIX  = "/api/get_team_view";
+const PLAYER_MAP_DATA_URL = "http://localhost:3000/player_map_data";
 
 // ── Role icons ──
 const ROLE_ICONS = {
@@ -447,73 +446,6 @@ async function pollConfig() {
     } catch(e) {}
 }
 
-function withCacheBuster(urlStr) {
-    const u = new URL(urlStr);
-    u.searchParams.set('t', Date.now().toString());
-    return u.toString();
-}
-
-function buildApiVariantUrl(liveStatsEndpoint, targetName) {
-    try {
-        const u = new URL(liveStatsEndpoint);
-        const parts = u.pathname.split('/');
-        const target = String(targetName || '').replace(/^\//, '').toLowerCase();
-
-        // Typical CRCON path: /api/get_live_game_stats
-        const idx = parts.findIndex(p => p.toLowerCase() === 'get_live_game_stats');
-        if (idx >= 0) {
-            parts[idx] = target;
-            u.pathname = parts.join('/');
-            return u.toString();
-        }
-
-        // Fallback: replace trailing segment with desired endpoint.
-        if (parts.length > 1) {
-            parts[parts.length - 1] = target;
-            u.pathname = parts.join('/');
-            return u.toString();
-        }
-        return '';
-    } catch {
-        return '';
-    }
-}
-
-async function fetchFirstOk(urlCandidates) {
-    let lastStatus = '';
-    for (const raw of urlCandidates) {
-        if (!raw) continue;
-        try {
-            const res = await fetch(withCacheBuster(raw), { cache: 'no-store' });
-            if (res.ok) return await res.json();
-            lastStatus = `${res.status}`;
-        } catch (e) {
-            lastStatus = e.message || 'network error';
-        }
-    }
-    throw new Error(lastStatus ? `Team view offline (${lastStatus})` : 'Team view offline');
-}
-
-function dedupe(arr) {
-    const out = [];
-    const seen = new Set();
-    arr.forEach(v => {
-        if (!v || seen.has(v)) return;
-        seen.add(v);
-        out.push(v);
-    });
-    return out;
-}
-
-function endpointLooksLike(endpoint, targets) {
-    try {
-        const path = new URL(endpoint).pathname.toLowerCase();
-        return targets.some(t => path.includes(t.toLowerCase()));
-    } catch {
-        return false;
-    }
-}
-
 async function update() {
     const statusEl  = document.getElementById('statusBar');
     const mapNameEl = document.getElementById('mapName');
@@ -521,7 +453,7 @@ async function update() {
 
     try {
         const cfg = cachedConfig;
-        if (!cfg.api_endpoint) {
+        if (!cfg.api_endpoint && !cfg.api_logs_endpoint) {
             mapStatus.className = 'map-status offline';
             mapStatus.textContent = 'NO API';
             return;
@@ -529,49 +461,16 @@ async function update() {
 
         const swapped = cfg.swap_sides;
         const alliedName = cfg.allied_faction || 'ALLIES';
-        const endpointSeeds = dedupe([cfg.api_logs_endpoint, cfg.api_endpoint].filter(Boolean));
+        const pmRes = await fetch(PLAYER_MAP_DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!pmRes.ok) throw new Error(`Team view offline (${pmRes.status})`);
+        const pmData = await pmRes.json();
+        if (!pmData || pmData.ok !== true) {
+            throw new Error(pmData?.error || 'Team view offline');
+        }
 
-        // Fetch gamestate for map name
-        let mapName = 'UNKNOWN MAP';
-        try {
-            const gsTargets = ['get_gamestate', 'get_game_state', 'gamestate'];
-            const gsCandidates = dedupe(endpointSeeds.flatMap(seed => {
-                const variants = gsTargets.map(t => buildApiVariantUrl(seed, t));
-                return endpointLooksLike(seed, gsTargets) ? [seed, ...variants] : variants;
-            }));
-            for (const gsUrl of gsCandidates) {
-                if (!gsUrl) continue;
-                const gsRes = await fetch(withCacheBuster(gsUrl), { cache: 'no-store' });
-                if (!gsRes.ok) continue;
-                const gs = await gsRes.json();
-                const result = gs.result || gs;
-                if (result?.map?.pretty_name) {
-                    mapName = result.map.pretty_name.toUpperCase();
-                    break;
-                } else if (result?.current_map?.pretty_name) {
-                    mapName = result.current_map.pretty_name.toUpperCase();
-                    break;
-                } else if (result?.pretty_name) {
-                    mapName = result.pretty_name.toUpperCase();
-                    break;
-                }
-            }
-        } catch(e) {}
-        mapNameEl.textContent = mapName;
-
-        // Fetch team view for positions and squads
-        const tvTargets = ['get_team_view', 'get_teamview', 'team_view'];
-        const tvCandidates = dedupe(endpointSeeds.flatMap(seed => {
-            const variants = tvTargets.map(t => buildApiVariantUrl(seed, t));
-            return endpointLooksLike(seed, tvTargets) ? [seed, ...variants] : variants;
-        }));
-        const tvData = await fetchFirstOk(tvCandidates);
-        const result = tvData.result || tvData;
-
-        // Extract allied and axis data
-        const teamsRoot = result.teams || result;
-        const alliedData = teamsRoot.allies || teamsRoot.allied || teamsRoot.us || {};
-        const axisData   = teamsRoot.axis   || teamsRoot.germany || teamsRoot.ger || {};
+        mapNameEl.textContent = (pmData.map_name || 'UNKNOWN MAP').toUpperCase();
+        const alliedData = pmData.allied || {};
+        const axisData   = pmData.axis   || {};
 
         // Flatten all players for map drawing
         const allPlayers = [];
@@ -611,7 +510,7 @@ async function update() {
     } catch(e) {
         mapStatus.className = 'map-status offline';
         mapStatus.textContent = 'SIGNAL LOST';
-        statusEl.textContent = `ERROR: ${e.message}${String(e.message).includes('401') ? ' · set Player Map API URL in Hub (authenticated get_team_view URL)' : ''}`;
+        statusEl.textContent = `ERROR: ${e.message}`;
     }
 }
 
