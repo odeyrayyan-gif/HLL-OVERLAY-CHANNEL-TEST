@@ -154,8 +154,8 @@
         "tokarev", "nagant", "luger", "walther", "p38"
     ];
     const TANK_ROLE_KEYWORDS = ["tank", "armor", "armour", "crewman", "gunner", "driver"];
-    const SNIPER_SCOPE_SIGS = ["8x", "zf4", "zf 4", "zf41", "zf 41", "pu", "l42", "scope", "scoped", "sniper"];
-    const SNIPER_RIFLE_SIGS = ["kar98", "karabiner 98", "m1903", "springfield", "mosin", "gewehr 43", "svt 40", "enfield"];
+    const SNIPER_SCOPE_SIGS = ["8x", "x8", "4x", "x4", "zf4", "zf 4", "zf41", "zf 41", "pu", "l42", "scope", "scoped", "sniper"];
+    const SNIPER_RIFLE_SIGS = ["kar98", "kar98k", "karabiner 98", "karabiner 98k", "m1903", "m1903 springfield", "springfield", "mosin", "gewehr 43", "svt 40", "enfield", "fg42"];
     const ARTILLERY_KEYWORDS = [
         "howitzer", "artillery", "lefh", "155mm", "152mm", "150mm", "122mm", "105mm", "sfh",
         "m114", "m2a1", "mlrs", "katyusha", "pak 43",
@@ -177,10 +177,13 @@
     const isInfantryWeaponName = (nameLower) => INFANTRY_WEAPON_KEYWORDS.some(k => nameLower.includes(k));
     const isArmorWeaponName = (nameLower) =>
         ARMOR_KEYWORDS.some(k => nameLower.includes(k)) || CAT_MAP.armor.some(k => nameLower.includes(k));
+    const SNIPER_ZOOM_RE = /(^|[^a-z0-9])(x[2-9]|[2-9]x|10x)([^a-z0-9]|$)/;
     const isSniperWeaponName = (nameLower) => {
-        if (CAT_MAP.sniper.some(k => nameLower.includes(k))) return true;
-        const hasScopeSig = SNIPER_SCOPE_SIGS.some(k => nameLower.includes(k));
-        const hasRifleSig = SNIPER_RIFLE_SIGS.some(k => nameLower.includes(k));
+        const normalized = nameLower.replace(/\s+/g, " ").trim();
+        if (CAT_MAP.sniper.some(k => normalized.includes(k))) return true;
+        if (normalized.includes("m1903 springfield")) return true;
+        const hasScopeSig = SNIPER_SCOPE_SIGS.some(k => normalized.includes(k)) || SNIPER_ZOOM_RE.test(normalized);
+        const hasRifleSig = SNIPER_RIFLE_SIGS.some(k => normalized.includes(k));
         return hasScopeSig && hasRifleSig;
     };
     const isSniperRole = (p) => {
