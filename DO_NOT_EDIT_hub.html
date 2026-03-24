@@ -457,19 +457,13 @@
             </div>
         </div>
 
-        <!-- Frequency — options change based on target -->
-        <label class="input-label" style="margin-top:8px">Show Frequency</label>
-        <div class="msg-freq-group" id="freqGroup">
-            <div class="msg-freq-btn selected" data-freq="every_loop" data-show="ticker" onclick="selectFreq(this)">Every Loop</div>
-            <div class="msg-freq-btn" data-freq="every_3" data-show="ticker" onclick="selectFreq(this)">Every 3 Loops</div>
-            <div class="msg-freq-btn" data-freq="every_5" data-show="ticker" onclick="selectFreq(this)">Every 5 Loops</div>
-            <div class="msg-freq-btn" data-freq="every_10" data-show="ticker" onclick="selectFreq(this)">Every 10 Loops</div>
-            <div class="msg-freq-btn" data-freq="every_2min" onclick="selectFreq(this)">Every 2 Min</div>
-            <div class="msg-freq-btn" data-freq="every_5min" onclick="selectFreq(this)">Every 5 Min</div>
-            <div class="msg-freq-btn" data-freq="every_10min" data-show="banner" onclick="selectFreq(this)" style="display:none">Every 10 Min</div>
-            <div class="msg-freq-btn" data-freq="every_15min" data-show="banner" onclick="selectFreq(this)" style="display:none">Every 15 Min</div>
-            <div class="msg-freq-btn" data-freq="every_30min" data-show="banner" onclick="selectFreq(this)" style="display:none">Every 30 Min</div>
-            <div class="msg-freq-btn" data-freq="test_5sec" data-show="banner" onclick="selectFreq(this)" style="display:none;border-color:rgba(0,255,136,0.3);color:var(--green)">⚡ Test (5 sec)</div>
+        <!-- Frequency (message banner only) -->
+        <label class="input-label" id="freqLabel" style="margin-top:8px;display:none">Message Banner Frequency</label>
+        <div class="msg-freq-group" id="freqGroup" style="display:none">
+            <div class="msg-freq-btn selected" data-freq="every_10min" onclick="selectFreq(this)">Every 10 Min</div>
+            <div class="msg-freq-btn" data-freq="every_15min" onclick="selectFreq(this)">Every 15 Min</div>
+            <div class="msg-freq-btn" data-freq="every_30min" onclick="selectFreq(this)">Every 30 Min</div>
+            <div class="msg-freq-btn" data-freq="test_5sec" onclick="selectFreq(this)" style="border-color:rgba(0,255,136,0.3);color:var(--green)">⚡ Test (5 sec)</div>
         </div>
 
         <!-- Top 5/10 schedule -->
@@ -957,7 +951,7 @@
     function phoneSetFreq(id, freq) {
         const msgs = getTickerMessages();
         const m = msgs.find(m => m.id === id);
-        if (m) m.freq = freq;
+        if (m && m.target === 'banner') m.freq = freq;
         setTickerMessages(msgs);
         renderPhoneMsgList();
     }
@@ -971,12 +965,6 @@
             return;
         }
         const FREQ_OPTS = [
-            { v: 'every_loop',  l: 'Every loop'    },
-            { v: 'every_3',     l: 'Every 3 loops' },
-            { v: 'every_5',     l: 'Every 5 loops' },
-            { v: 'every_10',    l: 'Every 10 loops'},
-            { v: 'every_2min',  l: 'Every 2 min'   },
-            { v: 'every_5min',  l: 'Every 5 min'   },
             { v: 'every_10min', l: 'Every 10 min'  },
             { v: 'every_15min', l: 'Every 15 min'  },
             { v: 'every_30min', l: 'Every 30 min'  },
@@ -987,9 +975,12 @@
                 <div class="phone-msg-icon">${getPlatformSvg(m.platform)}</div>
                 <div>
                     <div class="phone-msg-text">${m.text}</div>
-                    <select class="phone-freq-select" onchange="phoneSetFreq(${m.id}, this.value)">
-                        ${FREQ_OPTS.map(o => `<option value="${o.v}" ${m.freq === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
-                    </select>
+                    ${m.target === 'banner'
+                        ? `<select class="phone-freq-select" onchange="phoneSetFreq(${m.id}, this.value)">
+                            ${FREQ_OPTS.map(o => `<option value="${o.v}" ${m.freq === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
+                           </select>`
+                        : `<div class="phone-msg-freq">Uses Top 5/10 schedule</div>`
+                    }
                 </div>
                 <div class="phone-msg-toggle ${m.active ? 'on' : ''}" onclick="phoneToggleMessage(${m.id})"></div>
             </div>`).join('');
@@ -1202,17 +1193,11 @@
     });
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let selectedPlatform = { platform: 'general', icon: 'general' };
-    let selectedFreq   = 'every_loop';
+    let selectedFreq   = 'every_10min';
     let selectedTarget = 'ticker';
 
 
     const FREQ_LABELS = {
-        every_loop:  'Every loop',
-        every_3:     'Every 3 loops',
-        every_5:     'Every 5 loops',
-        every_10:    'Every 10 loops',
-        every_2min:  'Every 2 min',
-        every_5min:  'Every 5 min',
         every_10min: 'Every 10 min',
         every_15min: 'Every 15 min',
         every_30min: 'Every 30 min',
@@ -1279,21 +1264,23 @@
     }
 
     function updateFreqOptions(target) {
-        const isTicker = target === 'ticker';
-        // Show/hide loop-only options
-        document.querySelectorAll('.msg-freq-btn[data-show="ticker"]').forEach(b => {
-            b.style.display = isTicker ? '' : 'none';
-        });
-        // Show/hide banner-only options
-        document.querySelectorAll('.msg-freq-btn[data-show="banner"]').forEach(b => {
-            b.style.display = isTicker ? 'none' : '';
-        });
-        // Reset selection to first visible option
-        const first = document.querySelector('.msg-freq-btn:not([style*="display: none"]):not([style*="display:none"])');
+        const isBanner = target === 'banner';
+        const label = document.getElementById('freqLabel');
+        const group = document.getElementById('freqGroup');
+        if (label) label.style.display = isBanner ? 'block' : 'none';
+        if (group) group.style.display = isBanner ? 'grid' : 'none';
+
+        if (!isBanner) {
+            selectedFreq = null;
+            return;
+        }
+
+        const current = document.querySelector(`.msg-freq-btn[data-freq="${selectedFreq}"]`);
+        const first = current || document.querySelector('.msg-freq-btn');
         if (first) {
             document.querySelectorAll('.msg-freq-btn').forEach(b => b.classList.remove('selected'));
             first.classList.add('selected');
-            selectedFreq = first.dataset.freq;
+            selectedFreq = first.dataset.freq || 'every_10min';
         }
     }
 
@@ -1306,12 +1293,13 @@
             return;
         }
         const msgs = getTickerMessages();
+        const isBannerTarget = selectedTarget === 'banner';
         msgs.push({
             id:       Date.now(),
             platform: selectedPlatform.platform,
             icon:     selectedPlatform.platform,
             text,
-            freq:     selectedFreq,
+            ...(isBannerTarget ? { freq: (selectedFreq || 'every_10min') } : {}),
             target:   selectedTarget,
             active:   true
         });
@@ -1353,7 +1341,7 @@
                 <div class="msg-item-icon">${getPlatformSvg(m.platform)}</div>
                 <div class="msg-item-info">
                     <div class="msg-item-name">${m.text}</div>
-                    <div class="msg-item-freq">${FREQ_LABELS[m.freq] || m.freq}</div>
+                    <div class="msg-item-freq">${m.target === 'banner' ? (FREQ_LABELS[m.freq] || 'Every 10 min') : 'Uses Top 5/10 schedule'}</div>
                     <div class="msg-item-target">${m.target === 'banner' ? '💬 Message Banner' : '📊 Scroll Banners'}</div>
                 </div>
                 <div class="msg-toggle ${m.active ? 'on' : ''}" onclick="toggleMessage(${m.id})" title="${m.active ? 'Click to disable' : 'Click to enable'}"></div>
@@ -1442,6 +1430,7 @@
     }
 
     // Init on load
+    updateFreqOptions(selectedTarget);
     renderMsgList();
     renderPreview();
     renderPhoneMsgList();

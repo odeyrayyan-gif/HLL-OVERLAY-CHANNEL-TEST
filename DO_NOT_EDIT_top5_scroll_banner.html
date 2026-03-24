@@ -147,9 +147,8 @@
                 `).join('');
 
                 let msgHtml = '';
-                const active = getActiveMessages().filter(m => shouldShowMessage(m));
-                active.forEach(m => { msgHtml += buildMessageHtml(m); markMessageShown(m); });
-                loopCount++;
+                const active = getActiveMessages();
+                active.forEach(m => { msgHtml += buildMessageHtml(m); });
 
                 const ticker   = document.getElementById('ticker');
                 const combined = playerHtml + msgHtml;
@@ -187,32 +186,10 @@
 
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let tickerMessages   = [];
-    let loopCount        = 0;
-    let lastMsgTime      = {};  // id → last shown timestamp
 
     function getActiveMessages() {
         // Only show messages targeted at the scroll ticker
         return tickerMessages.filter(m => m.active && (!m.target || m.target === "ticker"));
-    }
-
-    function shouldShowMessage(m) {
-        const now = Date.now();
-        switch(m.freq) {
-            case 'every_loop':  return true;
-            case 'every_3':     return loopCount % 3 === 0;
-            case 'every_5':     return loopCount % 5 === 0;
-            case 'every_10':    return loopCount % 10 === 0;
-            case 'every_2min':  return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 120000;
-            case 'every_5min':  return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 300000;
-            case 'every_10min': return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 600000;
-            case 'every_15min': return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 900000;
-            case 'every_30min': return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 1800000;
-            default: return true;
-        }
-    }
-
-    function markMessageShown(m) {
-        lastMsgTime[m.id] = Date.now();
     }
 
     const PLATFORM_COLORS = {
