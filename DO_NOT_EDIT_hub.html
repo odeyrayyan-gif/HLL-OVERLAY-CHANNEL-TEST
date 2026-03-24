@@ -472,6 +472,19 @@
             <div class="msg-freq-btn" data-freq="test_5sec" data-show="banner" onclick="selectFreq(this)" style="display:none;border-color:rgba(0,255,136,0.3);color:var(--green)">⚡ Test (5 sec)</div>
         </div>
 
+        <!-- Top 5/10 schedule -->
+        <label class="input-label" style="margin-top:4px">Top 5/10 Banner Schedule — <span>show ticker only on interval</span></label>
+        <div class="server-row" style="margin-bottom:6px;">
+            <select id="tickerSchedule" class="server-select" onchange="onTickerScheduleChange()">
+                <option value="0">Always On</option>
+                <option value="5">Every 5 Minutes</option>
+                <option value="10">Every 10 Minutes</option>
+                <option value="15">Every 15 Minutes</option>
+                <option value="25">Every 25 Minutes</option>
+            </select>
+        </div>
+        <div class="section-hint" id="tickerScheduleHint" style="margin:0 0 12px 0">Controls both Top 5 and Top 10 overlays</div>
+
         <!-- Add button -->
         <button type="button" class="server-btn green" style="width:100%;padding:12px;font-size:13px;letter-spacing:2px;" onclick="addTickerMessage()">＋ ADD MESSAGE TO TICKER</button>
 
@@ -626,6 +639,35 @@
             hint.style.color = '#00ff88';
             setTimeout(() => { hint.textContent = 'Saved instantly to all overlays'; hint.style.color = '#718096'; }, 2000);
         } catch(e) {
+            hint.textContent = 'SAVE FAILED — is DO_NOT_EDIT_server.py running?';
+            hint.style.color = '#ff3c3c';
+        }
+    }
+
+    async function onTickerScheduleChange() {
+        const hint = document.getElementById('tickerScheduleHint');
+        const sel = document.getElementById('tickerSchedule');
+        const mins = Number(sel?.value || 0);
+        const valid = [0, 5, 10, 15, 25].includes(mins) ? mins : 0;
+        hint.textContent = 'SAVING...';
+        hint.style.color = '#718096';
+        try {
+            const res = await fetch(`${SERVER}/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker_schedule_minutes: valid })
+            });
+            const json = await res.json();
+            if (!json.ok) throw new Error();
+            hint.textContent = '✓ SAVED';
+            hint.style.color = '#00ff88';
+            setTimeout(() => {
+                hint.textContent = valid > 0
+                    ? `Top 5/10 will appear every ${valid} minutes`
+                    : 'Top 5/10 are always visible';
+                hint.style.color = '#718096';
+            }, 2000);
+        } catch (e) {
             hint.textContent = 'SAVE FAILED — is DO_NOT_EDIT_server.py running?';
             hint.style.color = '#ff3c3c';
         }
@@ -1130,6 +1172,16 @@
                     renderPreview();
                 }
                 renderPhoneMsgList();
+            }
+
+            // ── Sync top 5/top 10 schedule selector ──
+            const scheduleSel = document.getElementById('tickerSchedule');
+            if (scheduleSel) {
+                const mins = Number(data.ticker_schedule_minutes || 0);
+                const valid = [0, 5, 10, 15, 25].includes(mins) ? mins : 0;
+                if (String(scheduleSel.value) !== String(valid)) {
+                    scheduleSel.value = String(valid);
+                }
             }
 
         } catch(e) {

@@ -62,6 +62,7 @@
 
 <script>
     const CONFIG_URL = "http://localhost:3000/config";
+    const TICKER_WINDOW_MS = 45000; // show for 45s at each schedule boundary
 
     async function fetchNoCache(url) {
         const sep = url.includes("?") ? "&" : "?";
@@ -176,6 +177,7 @@
     let tickerMessages   = [];
     let loopCount        = 0;
     let lastMsgTime      = {};  // id → last shown timestamp
+    let tickerScheduleMinutes = 0;
 
     function getActiveMessages() {
         // Only show messages targeted at the scroll ticker
@@ -200,6 +202,23 @@
 
     function markMessageShown(m) {
         lastMsgTime[m.id] = Date.now();
+    }
+
+    function getScheduledVisibility(minutes) {
+        const mins = Number(minutes || 0);
+        if (![5, 10, 15, 25].includes(mins)) {
+            return true;
+        }
+        const now = Date.now();
+        const intervalMs = mins * 60 * 1000;
+        return (now % intervalMs) < TICKER_WINDOW_MS;
+    }
+
+    function applyScheduleVisibility() {
+        const wrap = document.querySelector('.ticker-wrap');
+        if (!wrap) return;
+        const show = getScheduledVisibility(tickerScheduleMinutes);
+        wrap.style.display = show ? 'flex' : 'none';
     }
 
     const PLATFORM_COLORS = {
@@ -236,7 +255,9 @@
             if (cfg && cfg.api_endpoint !== undefined) {
                 cachedEndpoint = cfg.api_endpoint || "";
                 tickerMessages = cfg.ticker_messages || [];
+                tickerScheduleMinutes = Number(cfg.ticker_schedule_minutes || 0);
             }
+            applyScheduleVisibility();
         } catch(e) { console.warn("[HLL] pollConfig failed:", e.message); }
     }
     pollConfig().then(() => {
@@ -244,6 +265,7 @@
         rafId = requestAnimationFrame(scrollTick);
     });
     setInterval(pollConfig, 1000);
+    setInterval(applyScheduleVisibility, 1000);
     setInterval(updateTicker, 4000);
 </script>
 </body>

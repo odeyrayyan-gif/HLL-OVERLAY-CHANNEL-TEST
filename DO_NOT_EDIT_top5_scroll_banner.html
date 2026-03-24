@@ -63,6 +63,7 @@
 
 <script>
     const CONFIG_URL = "http://localhost:3000/config";
+    const TICKER_WINDOW_MS = 45000; // show for 45s at each schedule boundary
 
     async function fetchNoCache(url) {
         const sep = url.includes("?") ? "&" : "?";
@@ -168,6 +169,21 @@
 
     // Refresh data every 2 minutes
     let cachedEndpoint = "";
+    let tickerScheduleMinutes = 0;
+
+    function isTickerWindowOpen() {
+        const mins = Number(tickerScheduleMinutes || 0);
+        if (![5, 10, 15, 25].includes(mins)) return true; // 0/invalid => always on
+        const nowMs = Date.now();
+        const cycleMs = mins * 60 * 1000;
+        return (nowMs % cycleMs) < TICKER_WINDOW_MS;
+    }
+
+    function applyTickerVisibility() {
+        const wrap = document.querySelector('.ticker-wrap');
+        if (!wrap) return;
+        wrap.style.display = isTickerWindowOpen() ? 'flex' : 'none';
+    }
 
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let tickerMessages   = [];
@@ -233,14 +249,17 @@
             if (cfg && cfg.api_endpoint !== undefined) {
                 cachedEndpoint = cfg.api_endpoint || "";
                 tickerMessages = cfg.ticker_messages || [];
+                tickerScheduleMinutes = Number(cfg.ticker_schedule_minutes || 0);
             }
         } catch(e) { console.warn("[HLL] pollConfig failed:", e.message); }
     }
     pollConfig().then(() => {
+        applyTickerVisibility();
         updateTicker();
         rafId = requestAnimationFrame(scrollTick);
     });
     setInterval(pollConfig, 1000);
+    setInterval(applyTickerVisibility, 1000);
     setInterval(updateTicker, 4000);
 </script>
 </body>

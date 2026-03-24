@@ -305,7 +305,15 @@ class HLLHandler(SimpleHTTPRequestHandler):
             with open(CONFIG_FILE, "r") as f:
                 return json.load(f)
         except:
-            return {"api_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}
+            return {
+                "api_endpoint": "",
+                "swap_sides": False,
+                "player": "",
+                "allied_faction": "ALLIES",
+                "ticker_messages": [],
+                "saved_servers": [],
+                "ticker_schedule_minutes": 0,
+            }
 
     def write_config(self, data):
         existing = self.read_config()
@@ -343,7 +351,19 @@ if __name__ == "__main__":
     # Make sure config and player files exist
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w") as f:
-            json.dump({"api_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}, f, indent=2)
+            json.dump(
+                {
+                    "api_endpoint": "",
+                    "swap_sides": False,
+                    "player": "",
+                    "allied_faction": "ALLIES",
+                    "ticker_messages": [],
+                    "saved_servers": [],
+                    "ticker_schedule_minutes": 0,
+                },
+                f,
+                indent=2,
+            )
     if not os.path.exists(PLAYER_FILE):
         with open(PLAYER_FILE, "w") as f:
             f.write("")
