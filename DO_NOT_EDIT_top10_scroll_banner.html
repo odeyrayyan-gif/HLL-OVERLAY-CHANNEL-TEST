@@ -62,6 +62,7 @@
 
 <script>
     const CONFIG_URL = "http://localhost:3000/config";
+    const TICKER_WINDOW_MS = 45000; // show for 45s at each schedule boundary
 
     async function fetchNoCache(url) {
         const sep = url.includes("?") ? "&" : "?";
@@ -79,16 +80,25 @@
 
 
     // Exclude armor crews and artillery gunners from infantry lists
-    const EXCLUDED_WEAPONS_LIST = [
-        'artillery','lefh','155mm','152mm','150mm','122mm','105mm','howitzer','sfh','brumm','stuh','strumpanzer','pak40','anti_tank',
-        'zis3','88mm','75mm','76mm','tank','mine'
+    const ARTY_EXCLUSIONS = [
+        'artillery','lefh','155mm','152mm','150mm','122mm','105mm','howitzer','sfh','brumm','stuh','strumpanzer','katyusha','mlrs','zis-3','zis3','pak 43'
+    ];
+    const ARMOR_EXCLUSIONS = [
+        'panzer','tiger','panther','puma','sd.kfz','luchs','lux','marder',
+        'sherman','stuart','greyhound','jumbo','m4a3','m4a1','m5a1','m8',
+        'firefly','cromwell','crusader','churchill','tetrarch','daimler',
+        'is-1','is-2','is2','t-34','t34','t-70','ba-10',
+        'coaxial','kwk','75mm cannon','75mm m3','76mm m1','88mm kwk',
+        'qf 75mm','qf 6 pounder','qf 2 pounder','17pdr','17 pounder','hull mg','besa'
     ];
     function isArtyOrArmor(p) {
-        if ((p.v_kills || 0) > (Number(p.kills || 0) * 0.4)) return true;
-        if (!p.weapons) return false;
-        const top = Object.entries(p.weapons).sort((a,b) => b[1]-a[1])[0];
-        if (!top) return false;
-        return EXCLUDED_WEAPONS_LIST.some(ex => top[0].toLowerCase().includes(ex));
+        const vehicleKills = Number(p?.v_kills ?? p?.vehicle_kills ?? p?.vehicles_destroyed ?? 0);
+        if (Number.isFinite(vehicleKills) && vehicleKills > 0) return true;
+        const weaponNames = Object.keys((p && p.weapons) || {});
+        if (!weaponNames.length) return false;
+        const wAll = weaponNames.join(' ').toLowerCase();
+        if (ARTY_EXCLUSIONS.some(k => wAll.includes(k))) return true;
+        return ARMOR_EXCLUSIONS.some(k => wAll.includes(k));
     }
     // ── JS-driven scroll — never resets, content updates silently ──
     const SPEED = 80; // pixels per second
@@ -136,9 +146,8 @@
                 `).join('');
 
                 let msgHtml = '';
-                const active = getActiveMessages().filter(m => shouldShowMessage(m));
-                active.forEach(m => { msgHtml += buildMessageHtml(m); markMessageShown(m); });
-                loopCount++;
+                const active = getActiveMessages();
+                active.forEach(m => { msgHtml += buildMessageHtml(m); });
 
                 const ticker  = document.getElementById('ticker');
                 const combined = playerHtml + msgHtml;
@@ -165,32 +174,28 @@
 
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let tickerMessages   = [];
-    let loopCount        = 0;
-    let lastMsgTime      = {};  // id → last shown timestamp
+    let tickerScheduleMinutes = 0;
 
     function getActiveMessages() {
         // Only show messages targeted at the scroll ticker
         return tickerMessages.filter(m => m.active && (!m.target || m.target === "ticker"));
     }
 
-    function shouldShowMessage(m) {
-        const now = Date.now();
-        switch(m.freq) {
-            case 'every_loop':  return true;
-            case 'every_3':     return loopCount % 3 === 0;
-            case 'every_5':     return loopCount % 5 === 0;
-            case 'every_10':    return loopCount % 10 === 0;
-            case 'every_2min':  return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 120000;
-            case 'every_5min':  return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 300000;
-            case 'every_10min': return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 600000;
-            case 'every_15min': return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 900000;
-            case 'every_30min': return !lastMsgTime[m.id] || now - lastMsgTime[m.id] >= 1800000;
-            default: return true;
+    function getScheduledVisibility(minutes) {
+        const mins = Number(minutes || 0);
+        if (![5, 10, 15, 25].includes(mins)) {
+            return true;
         }
+        const now = Date.now();
+        const intervalMs = mins * 60 * 1000;
+        return (now % intervalMs) < TICKER_WINDOW_MS;
     }
 
-    function markMessageShown(m) {
-        lastMsgTime[m.id] = Date.now();
+    function applyScheduleVisibility() {
+        const wrap = document.querySelector('.ticker-wrap');
+        if (!wrap) return;
+        const show = getScheduledVisibility(tickerScheduleMinutes);
+        wrap.style.display = show ? 'flex' : 'none';
     }
 
     const PLATFORM_COLORS = {
@@ -227,7 +232,9 @@
             if (cfg && cfg.api_endpoint !== undefined) {
                 cachedEndpoint = cfg.api_endpoint || "";
                 tickerMessages = cfg.ticker_messages || [];
+                tickerScheduleMinutes = Number(cfg.ticker_schedule_minutes || 0);
             }
+            applyScheduleVisibility();
         } catch(e) { console.warn("[HLL] pollConfig failed:", e.message); }
     }
     pollConfig().then(() => {
@@ -235,6 +242,7 @@
         rafId = requestAnimationFrame(scrollTick);
     });
     setInterval(pollConfig, 1000);
+    setInterval(applyScheduleVisibility, 1000);
     setInterval(updateTicker, 4000);
 </script>
 </body>

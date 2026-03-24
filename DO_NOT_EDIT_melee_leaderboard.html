@@ -78,7 +78,29 @@
 <script>
 const CONFIG_URL = "http://localhost:3000/config";
 
-const MELEE_KEYS = ["knife", "shovel", "spade", "e-tool", "etool", "melee", "byonet", "bayonet"];
+const MELEE_KEYS = [
+    // Generic melee labels
+    "melee", "knife", "bayonet", "byonet", "bajonett",
+    // Shovel/spade variants across factions
+    "shovel", "spade", "spaten", "feldspaten", "klappspaten",
+    "e-tool", "etool", "entrenching", "entrenchment", "trench tool",
+    "mpl-50", "lopatka",
+    // Other close-combat weapons seen in some loadouts
+    "trench knife", "combat knife", "fighting knife", "dagger", "kukri", "hatchet", "axe"
+];
+
+function toNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function weaponKillValue(raw) {
+    if (typeof raw === "number" || typeof raw === "string") return toNum(raw);
+    if (raw && typeof raw === "object") {
+        return toNum(raw.kills ?? raw.kill ?? raw.count ?? raw.value ?? raw.total ?? 0);
+    }
+    return 0;
+}
 
 const AXIS_SIGS = ["kar98","mp40","mg34","mg42","stg44","fg42","gewehr","zf41",
     "p38","luger","walther","stielhandgranate","tiger","panzer","puma","lux",
@@ -167,7 +189,7 @@ async function update() {
             let meleeKills = 0;
             if (p.weapons) {
                 Object.entries(p.weapons).forEach(([w, count]) => {
-                    if (MELEE_KEYS.some(k => w.toLowerCase().includes(k))) meleeKills += count;
+                    if (MELEE_KEYS.some(k => w.toLowerCase().includes(k))) meleeKills += weaponKillValue(count);
                 });
             }
 

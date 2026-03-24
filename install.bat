@@ -10,7 +10,7 @@ echo  ============================================================
 echo.
 
 set INSTALL_DIR=C:\HLL-Overlay-TEST
-set GITHUB=https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-TEST/main
+set GITHUB=https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-CHANNEL-TEST/main
 set BACKUP_DIR=%TEMP%\HLL-Overlay-Backup
 
 :: ── Check if this is a fresh install or reinstall ────────────
@@ -95,7 +95,7 @@ echo.
 echo  [4/5] Downloading all HLL Overlay files from GitHub...
 echo.
 
-set FILES=DO_NOT_EDIT_server.py DO_NOT_EDIT_hub.html DO_NOT_EDIT_team_compare.html DO_NOT_EDIT_map_overlay.html DO_NOT_EDIT_at_leaderboard.html DO_NOT_EDIT_melee_leaderboard.html DO_NOT_EDIT_player_spotlight.html DO_NOT_EDIT_top5_scroll_banner.html DO_NOT_EDIT_top10_scroll_banner.html DO_NOT_EDIT_killstreaks.html DO_NOT_EDIT_killfeed.html DO_NOT_EDIT_tank_scoreboard.html DO_NOT_EDIT_message_banner.html DO_NOT_EDIT_settings.json DO_NOT_EDIT_player.txt version.txt changelog.md README.txt start.bat
+set FILES=DO_NOT_EDIT_server.py DO_NOT_EDIT_hub.html DO_NOT_EDIT_team_compare.html DO_NOT_EDIT_map_overlay.html DO_NOT_EDIT_at_leaderboard.html DO_NOT_EDIT_melee_leaderboard.html DO_NOT_EDIT_player_spotlight.html DO_NOT_EDIT_top5_scroll_banner.html DO_NOT_EDIT_top10_scroll_banner.html DO_NOT_EDIT_killstreaks.html DO_NOT_EDIT_killfeed.html DO_NOT_EDIT_tank_scoreboard.html DO_NOT_EDIT_message_banner.html DO_NOT_EDIT_settings.json DO_NOT_EDIT_player.txt version.txt changelog.md README.txt HLL_Overlay.ico start.bat
 
 for %%f in (%FILES%) do (
     echo        Downloading %%f...
@@ -121,7 +121,7 @@ echo  [5/5] Creating desktop shortcut...
 :: Get actual desktop path via PowerShell (handles OneDrive-moved desktops)
 for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set DESKTOP=%%D
 set SHORTCUT=!DESKTOP!\HLL Overlay TEST.lnk
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('!SHORTCUT!'); $sc.TargetPath = 'C:\HLL-Overlay-TEST\start.bat'; $sc.WorkingDirectory = 'C:\HLL-Overlay-TEST'; $sc.IconLocation = 'cmd.exe,0'; $sc.Description = 'HLL Command Hub'; $sc.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('!SHORTCUT!'); $sc.TargetPath = 'C:\HLL-Overlay-TEST\start.bat'; $sc.WorkingDirectory = 'C:\HLL-Overlay-TEST'; $sc.IconLocation = 'C:\HLL-Overlay-TEST\HLL_Overlay.ico'; $sc.Description = 'HLL Command Hub'; $sc.Save()"
 echo        Desktop shortcut created.
 
 :: ── Done ─────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ echo  ============================================================
 echo   INSTALLATION COMPLETE!
 echo  ============================================================
 echo.
-echo   Installed to: C:\HLL-Overlay
+echo   Installed to: C:\HLL-Overlay-TEST
 echo   Desktop shortcut: HLL Overlay TEST
 echo.
 echo   Starting HLL Overlay and opening hub...

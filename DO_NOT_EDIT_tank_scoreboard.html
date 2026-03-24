@@ -12,7 +12,7 @@
             --accent:    #ac2e2e;
             --border:    1px solid rgba(255,255,255,0.1);
             --panel-width:  520px;
-            --panel-height: 585px;
+            --panel-height: 650px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -316,10 +316,47 @@
     const ARMOR_KEYWORDS = [
         "panzer", "tiger", "panther", "sherman", "stuart",
         "firefly", "puma", "lux", "marder", "halftrack", "greyhound",
-        "is-2", "is2", "t-34", "t34", "coaxial", "kwk",
+        "is-2", "is2", "t-34", "t34", "sd.kfz", "coaxial", "co-axial", "co axial", "coax", "kwk",
+        "75mm cannon", "75mm m3", "76mm m1", "88mm kwk",
+        "qf 75mm", "qf 6 pounder", "qf 2 pounder",
         "17pdr", "17 pounder", "hull mg", "besa",
         "m4a3", "m4a1", "m5a1", "m8a1"
     ];
+    const AT_INFANTRY_KEYWORDS = [
+        "bazooka", "panzerschreck", "piat", "panzerfaust", "anti_tank", "m5 at"
+    ];
+    const INFANTRY_WEAPON_KEYWORDS = [
+        "kar98", "karabiner", "gewehr", "mp40", "stg44", "fg42",
+        "garand", "thompson", "carbine", "springfield", "m1911",
+        "grease", "sten", "enfield", "mosin", "ppsh", "svt40",
+        "tokarev", "nagant", "luger", "walther", "p38"
+    ];
+    const TANK_ROLE_KEYWORDS = ["tank", "armor", "armour", "crewman", "gunner", "driver"];
+    const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+    const weaponKillValue = (raw) => {
+        if (typeof raw === "number" || typeof raw === "string") return toNum(raw);
+        if (raw && typeof raw === "object") {
+            return toNum(raw.kills ?? raw.kill ?? raw.count ?? raw.value ?? raw.total ?? 0);
+        }
+        return 0;
+    };
+    const isATWeaponName = (nameLower) => AT_INFANTRY_KEYWORDS.some(k => nameLower.includes(k));
+    const isInfantryWeaponName = (nameLower) => INFANTRY_WEAPON_KEYWORDS.some(k => nameLower.includes(k));
+    const isArmorWeaponName = (nameLower) => ARMOR_KEYWORDS.some(k => nameLower.includes(k));
+    function getArmorWeaponKills(p) {
+        let total = 0;
+        Object.entries((p && p.weapons) || {}).forEach(([name, val]) => {
+            const nl = name.toLowerCase();
+            if (ARTILLERY_KEYWORDS.some(k => nl.includes(k))) return;
+            if (isATWeaponName(nl)) return;
+            if (isInfantryWeaponName(nl)) return;
+            if (isArmorWeaponName(nl)) total += weaponKillValue(val);
+        });
+        return total;
+    }
 
     // Words that mean it's ARTILLERY — never show these as armor
     const ARTILLERY_KEYWORDS = [
@@ -329,21 +366,33 @@
     ];
 
     function isArmorCrew(p) {
-        if (!p.weapons) return false;
-        const weaponNames = Object.keys(p.weapons);
+        const vehicleKills = Number(p?.v_kills ?? p?.vehicle_kills ?? p?.vehicles_destroyed ?? 0);
+        const weaponNames = Object.keys((p && p.weapons) || {});
+        if (!weaponNames.length) {
+            const roleText = `${p?.role || ""} ${p?.class || ""} ${p?.loadout || ""} ${p?.unit || ""} ${p?.squad || ""}`.toLowerCase();
+            const hasTankRole = TANK_ROLE_KEYWORDS.some(k => roleText.includes(k));
+            return Number.isFinite(vehicleKills) && vehicleKills > 0 && hasTankRole;
+        }
         const wAll = weaponNames.join(" ").toLowerCase();
 
         // Hard exclude if any weapon is artillery
         if (ARTILLERY_KEYWORDS.some(k => wAll.includes(k))) return false;
 
-        // Anyone with vehicle kills qualifies
-        if ((p.v_kills || 0) > 0) return true;
-
-        // Check each weapon for armor keywords
-        return weaponNames.some(w => {
+        const hasArmorWeapon = weaponNames.some(w => {
             const wl = w.toLowerCase();
-            return ARMOR_KEYWORDS.some(k => wl.includes(k));
+            if (isATWeaponName(wl)) return false;
+            if (isInfantryWeaponName(wl)) return false;
+            return isArmorWeaponName(wl);
         });
+        const hasATWeapon = weaponNames.some(w => {
+            const wl = w.toLowerCase();
+            return isATWeaponName(wl);
+        });
+
+        // Pure AT infantry should not appear in armor panels.
+        if (hasATWeapon && !hasArmorWeapon) return false;
+        if (hasArmorWeapon) return true;
+        return Number.isFinite(vehicleKills) && vehicleKills > 0 && !hasATWeapon;
     }
 
     function renderPanel(contentId, titleId, footerId, crews, color, factionName) {
@@ -369,7 +418,7 @@
             </div>`;
 
         const rows = crews.map((p, i) => {
-            const kills  = Number(p.kills  || 0);
+            const kills  = getArmorWeaponKills(p);
             const deaths = Number(p.deaths || 0);
             const kd     = deaths > 0 ? (kills / deaths).toFixed(1) : kills;
             const tank   = detectTankType(p);
@@ -441,12 +490,12 @@
             const allCrew = players.filter(p => isArmorCrew(p));
             const leftCrew  = allCrew
                 .filter(p => identifyTeam(p) === leftFaction)
-                .sort((a, b) => Number(b.kills || 0) - Number(a.kills || 0))
-                .slice(0, 8);
+                .sort((a, b) => getArmorWeaponKills(b) - getArmorWeaponKills(a))
+                .slice(0, 9);
             const rightCrew = allCrew
                 .filter(p => identifyTeam(p) === rightFaction)
-                .sort((a, b) => Number(b.kills || 0) - Number(a.kills || 0))
-                .slice(0, 8);
+                .sort((a, b) => getArmorWeaponKills(b) - getArmorWeaponKills(a))
+                .slice(0, 9);
 
             renderPanel("left-content",  "left-title",  "left-footer",  leftCrew,  leftColor,  leftName);
             renderPanel("right-content", "right-title", "right-footer", rightCrew, rightColor, rightName);
