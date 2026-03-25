@@ -146,7 +146,7 @@
 
             <div id="playerName" class="name">Player</div>
 
-            <div class="stats">
+            <div class="stats" id="statsGrid">
                 <div class="stat">
                     <div id="kills" class="value">0</div>
                     <div class="label">Kills</div>
@@ -163,9 +163,9 @@
                     <div id="kpm" class="value">0.00</div>
                     <div class="label">KPM</div>
                 </div>
-                <div class="stat">
-                    <div id="combat" class="value">0</div>
-                    <div class="label">Combat</div>
+                <div class="stat" id="statBox">
+                    <div id="statVal" class="value">0</div>
+                    <div id="statLabel" class="label">Combat</div>
                 </div>
             </div>
 
@@ -237,7 +237,6 @@ function render(p){
     const deaths=Number(p.deaths||0);
     const kd=deaths>0?(kills/deaths).toFixed(2):String(kills);
     const kpm=Number(p.kills_per_minute||0).toFixed(2);
-    const combat=Number(p.combat||0);
     const weapon=getBestWeapon(p);
 
     document.getElementById("playerName").textContent=p.player||"Unknown";
@@ -245,8 +244,30 @@ function render(p){
     document.getElementById("deaths").textContent=deaths;
     document.getElementById("kd").textContent=kd;
     document.getElementById("kpm").textContent=kpm;
-    document.getElementById("combat").textContent=combat;
     document.getElementById("weaponName").textContent=weapon;
+
+    // Stat mode display
+    const statMode = (cachedSettings && cachedSettings.stat_mode) || 'combat';
+    const grid = document.getElementById('statsGrid');
+    const statBox = document.getElementById('statBox');
+    const statVal = document.getElementById('statVal');
+    const statLbl = document.getElementById('statLabel');
+
+    if (statMode === 'all') {
+        grid.style.gridTemplateColumns = 'repeat(7,1fr)';
+        statBox.innerHTML = `
+            <div style="display:contents">
+                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.combat||0)}</div><div class="label">CMB</div></div>
+                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.defense||0)}</div><div class="label">DEF</div></div>
+                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.support||0)}</div><div class="label">SUP</div></div>
+                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.offense||0)}</div><div class="label">OFF</div></div>
+            </div>`;
+    } else {
+        grid.style.gridTemplateColumns = 'repeat(5,1fr)';
+        const statMap = { combat: ['combat','Combat'], defense: ['defense','Defense'], support: ['support','Support'], offense: ['offense','Offense'] };
+        const [key, label] = statMap[statMode] || ['combat','Combat'];
+        statBox.innerHTML = `<div id="statVal" class="value">${Number(p[key]||0)}</div><div id="statLabel" class="label">${label}</div>`;
+    }
 
     status.style.display="none";
     card.style.display="block";
