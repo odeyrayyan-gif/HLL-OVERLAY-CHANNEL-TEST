@@ -399,12 +399,11 @@
         </div>
         <div style="margin-top:12px;">
             <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Stat Display</div>
-            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;" id="statModeGroup">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;" id="statModeGroup">
                 <div class="stat-mode-btn selected" data-stat="combat"  onclick="setStatMode(this)">Combat</div>
                 <div class="stat-mode-btn" data-stat="defense" onclick="setStatMode(this)">Defense</div>
                 <div class="stat-mode-btn" data-stat="support" onclick="setStatMode(this)">Support</div>
                 <div class="stat-mode-btn" data-stat="offense" onclick="setStatMode(this)">Offense</div>
-                <div class="stat-mode-btn" data-stat="all"     onclick="setStatMode(this)">All</div>
             </div>
         </div>
     </div>
@@ -488,7 +487,16 @@
         <div class="msg-list" id="msgList"></div>
 
         <!-- Banner frequency controls -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Scroll Banner Stat</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;" id="bannerStatModeGroup">
+                <div class="stat-mode-btn selected" data-stat="combat"  onclick="setBannerStat(this)">Combat</div>
+                <div class="stat-mode-btn" data-stat="defense" onclick="setBannerStat(this)">Defense</div>
+                <div class="stat-mode-btn" data-stat="support" onclick="setBannerStat(this)">Support</div>
+                <div class="stat-mode-btn" data-stat="offense" onclick="setBannerStat(this)">Offense</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;">
             <div>
                 <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Top 5 Banner Frequency</div>
                 <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
@@ -603,12 +611,11 @@
             Spotlight Player
             <span class="phone-hint" id="phoneSpotlightHint">type to search</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px;" id="phoneStatModeGroup">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;" id="phoneStatModeGroup">
             <div class="stat-mode-btn selected" data-stat="combat"  onclick="setStatMode(this, true)">CMB</div>
             <div class="stat-mode-btn" data-stat="defense" onclick="setStatMode(this, true)">DEF</div>
             <div class="stat-mode-btn" data-stat="support" onclick="setStatMode(this, true)">SUP</div>
             <div class="stat-mode-btn" data-stat="offense" onclick="setStatMode(this, true)">OFF</div>
-            <div class="stat-mode-btn" data-stat="all"     onclick="setStatMode(this, true)">ALL</div>
         </div>
         <input type="text" class="phone-input" id="phone-player"
             placeholder="Part of player name..."
@@ -961,8 +968,14 @@
             if (data.allied_faction) { currentFaction = data.allied_faction; updateFactionPills(data.allied_faction); updatePhoneFactionPills(data.allied_faction); }
             if (data.stat_mode) {
                 currentStatMode = data.stat_mode;
-                document.querySelectorAll('.stat-mode-btn').forEach(b => {
+                document.querySelectorAll('#statModeGroup .stat-mode-btn, #phoneStatModeGroup .stat-mode-btn').forEach(b => {
                     b.classList.toggle('selected', b.dataset.stat === data.stat_mode);
+                });
+            }
+            if (data.banner_stat_mode) {
+                currentBannerStat = data.banner_stat_mode;
+                document.querySelectorAll('#bannerStatModeGroup .stat-mode-btn').forEach(b => {
+                    b.classList.toggle('selected', b.dataset.stat === data.banner_stat_mode);
                 });
             }
             if (data.top5_freq  !== undefined) { bannerFreqs.top5_freq  = data.top5_freq;  const s5  = document.getElementById('top5FreqSelect');  if (s5)  s5.value  = data.top5_freq; }
@@ -1233,6 +1246,21 @@
     });
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let currentStatMode = 'combat';
+
+    let currentBannerStat = 'combat';
+
+    function setBannerStat(el) {
+        const stat = el.dataset.stat;
+        currentBannerStat = stat;
+        document.querySelectorAll('#bannerStatModeGroup .stat-mode-btn').forEach(b => {
+            b.classList.toggle('selected', b.dataset.stat === stat);
+        });
+        fetch(`${SERVER}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ banner_stat_mode: stat })
+        }).catch(() => {});
+    }
 
     function setStatMode(el, isPhone) {
         const stat = el.dataset.stat;
