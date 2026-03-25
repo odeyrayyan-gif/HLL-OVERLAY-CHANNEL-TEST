@@ -253,21 +253,10 @@ function render(p){
     const statVal = document.getElementById('statVal');
     const statLbl = document.getElementById('statLabel');
 
-    if (statMode === 'all') {
-        grid.style.gridTemplateColumns = 'repeat(7,1fr)';
-        statBox.innerHTML = `
-            <div style="display:contents">
-                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.combat||0)}</div><div class="label">CMB</div></div>
-                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.defense||0)}</div><div class="label">DEF</div></div>
-                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.support||0)}</div><div class="label">SUP</div></div>
-                <div class="stat" style="border:none;padding:4px;"><div class="value" style="font-size:18px">${Number(p.offense||0)}</div><div class="label">OFF</div></div>
-            </div>`;
-    } else {
-        grid.style.gridTemplateColumns = 'repeat(5,1fr)';
-        const statMap = { combat: ['combat','Combat'], defense: ['defense','Defense'], support: ['support','Support'], offense: ['offense','Offense'] };
-        const [key, label] = statMap[statMode] || ['combat','Combat'];
-        statBox.innerHTML = `<div id="statVal" class="value">${Number(p[key]||0)}</div><div id="statLabel" class="label">${label}</div>`;
-    }
+    grid.style.gridTemplateColumns = 'repeat(5,1fr)';
+    const statMap = { combat: ['combat','Combat'], defense: ['defense','Defense'], support: ['support','Support'], offense: ['offense','Offense'] };
+    const [key, label] = statMap[statMode] || ['combat','Combat'];
+    statBox.innerHTML = `<div id="statVal" class="value">${Number(p[key]||0)}</div><div id="statLabel" class="label">${label}</div>`;
 
     status.style.display="none";
     card.style.display="block";
