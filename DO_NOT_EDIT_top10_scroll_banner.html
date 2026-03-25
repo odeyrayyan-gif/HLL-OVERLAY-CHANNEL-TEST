@@ -136,7 +136,7 @@
                     .sort((a, b) => b.kills - a.kills)
                     .slice(0, 10);
 
-                const statMode = cachedConfig.stat_mode || 'combat';
+                const statMode = cachedConfig.banner_stat_mode || 'combat';
                 const STAT_MAP = { combat: ['combat','CMB'], defense: ['defense','DEF'], support: ['support','SUP'], offense: ['offense','OFF'] };
                 const playerHtml = topKillers.map((p, index) => {
                     let statHtml = '';
