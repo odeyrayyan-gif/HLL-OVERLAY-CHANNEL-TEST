@@ -16,6 +16,7 @@
             position: fixed;
             bottom: 0;
             width: 100%;
+            transition: opacity 0.5s ease, transform 0.5s ease;
             height: 50px; 
             background: rgba(0, 0, 0, 0.9);
             border-top: 3px solid #ff9d00;
@@ -63,6 +64,7 @@
 
 <script>
     const CONFIG_URL = "http://localhost:3000/config";
+    const IS_TOP5 = true;
 
     async function fetchNoCache(url) {
         const sep = url.includes("?") ? "&" : "?";
@@ -135,15 +137,24 @@
                     .sort((a, b) => b.kills - a.kills)
                     .slice(0, 5);
 
-                const playerHtml = topKillers.map((p, index) => `
-                    <div class="player-entry">
+                const statMode = cachedConfig.stat_mode || 'combat';
+                const STAT_MAP = { combat: ['combat','CMB'], defense: ['defense','DEF'], support: ['support','SUP'], offense: ['offense','OFF'] };
+                const playerHtml = topKillers.map((p, index) => {
+                    let statHtml = '';
+                    if (statMode === 'all') {
+                        statHtml = `<span class="stat-label">CMB:</span><span class="stat-val">${p.combat||0}</span><span class="stat-label">DEF:</span><span class="stat-val">${p.defense||0}</span><span class="stat-label">SUP:</span><span class="stat-val">${p.support||0}</span><span class="stat-label">OFF:</span><span class="stat-val">${p.offense||0}</span>`;
+                    } else {
+                        const [key, lbl] = STAT_MAP[statMode] || ['combat','CMB'];
+                        statHtml = `<span class="stat-label">${lbl}:</span><span class="stat-val">${p[key]||0}</span>`;
+                    }
+                    return `<div class="player-entry">
                         <span class="rank">${index + 1}</span>
                         <span class="name">${p.player}</span>
                         <span class="stat-label">K:</span><span class="stat-val">${p.kills}</span>
-                        <span class="stat-label">Combat:</span><span class="stat-val">${p.combat}</span>
+                        ${statHtml}
                         <span class="divider"> // </span>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
 
                 let msgHtml = '';
                 const active = getActiveMessages().filter(m => shouldShowMessage(m));
@@ -168,6 +179,7 @@
 
     // Refresh data every 2 minutes
     let cachedEndpoint = "";
+    let cachedConfig = {};
 
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let tickerMessages   = [];
@@ -225,6 +237,55 @@
             </div>`;
     }
 
+
+    // ── Banner frequency show/hide ──
+    let bannerVisible = true;
+    let bannerFreq = 'indefinite';
+    let bannerTimer = null;
+
+    async function checkBannerFreq() {
+        try {
+            const r = await fetch(CONFIG_URL + '?t=' + Date.now(), { cache: 'no-store' });
+            if (!r.ok) return;
+            const cfg = await r.json();
+            const key = IS_TOP5 ? 'top5_freq' : 'top10_freq';
+            const freq = cfg[key] || 'indefinite';
+            if (freq !== bannerFreq) {
+                bannerFreq = freq;
+                applyBannerFreq();
+            }
+        } catch(e) {}
+    }
+
+    function applyBannerFreq() {
+        if (bannerTimer) clearInterval(bannerTimer);
+        if (bannerFreq === 'indefinite') {
+            showBanner();
+            return;
+        }
+        const minutes = parseInt(bannerFreq);
+        const ms = minutes * 60 * 1000;
+        // Show for 30 seconds, hide for the rest of the interval
+        showBanner();
+        setTimeout(() => hideBanner(), 30000);
+        bannerTimer = setInterval(() => {
+            showBanner();
+            setTimeout(() => hideBanner(), 30000);
+        }, ms);
+    }
+
+    function showBanner() {
+        document.querySelector('.ticker-wrap').style.opacity = '1';
+        document.querySelector('.ticker-wrap').style.transform = 'translateY(0)';
+        bannerVisible = true;
+    }
+
+    function hideBanner() {
+        document.querySelector('.ticker-wrap').style.opacity = '0';
+        document.querySelector('.ticker-wrap').style.transform = 'translateY(100%)';
+        bannerVisible = false;
+    }
+
     async function pollConfig() {
         try {
             const r = await fetch(CONFIG_URL + "?t=" + Date.now(), { cache: "no-store" });
@@ -233,15 +294,18 @@
             if (cfg && cfg.api_endpoint !== undefined) {
                 cachedEndpoint = cfg.api_endpoint || "";
                 tickerMessages = cfg.ticker_messages || [];
+                cachedConfig = cfg;
             }
         } catch(e) { console.warn("[HLL] pollConfig failed:", e.message); }
     }
     pollConfig().then(() => {
         updateTicker();
         rafId = requestAnimationFrame(scrollTick);
+        checkBannerFreq();
     });
     setInterval(pollConfig, 1000);
     setInterval(updateTicker, 4000);
+    setInterval(checkBannerFreq, 5000);
 </script>
 </body>
 </html>
