@@ -474,6 +474,34 @@
         <!-- Saved messages list -->
         <div class="msg-list" id="msgList"></div>
 
+        <!-- Banner frequency controls -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Top 5 Banner Frequency</div>
+                <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
+                    onchange="setBannerFreq('top5_freq', this.value)" id="top5FreqSelect">
+                    <option value="indefinite">Always On</option>
+                    <option value="5min">Every 5 Min</option>
+                    <option value="10min">Every 10 Min</option>
+                    <option value="15min">Every 15 Min</option>
+                    <option value="20min">Every 20 Min</option>
+                    <option value="25min">Every 25 Min</option>
+                </select>
+            </div>
+            <div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Top 10 Banner Frequency</div>
+                <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
+                    onchange="setBannerFreq('top10_freq', this.value)" id="top10FreqSelect">
+                    <option value="indefinite">Always On</option>
+                    <option value="5min">Every 5 Min</option>
+                    <option value="10min">Every 10 Min</option>
+                    <option value="15min">Every 15 Min</option>
+                    <option value="20min">Every 20 Min</option>
+                    <option value="25min">Every 25 Min</option>
+                </select>
+            </div>
+        </div>
+
         <!-- Live preview -->
         <div class="msg-preview-wrap">
             <div class="msg-preview-label" id="msgPreviewLabel">Live Preview — how it looks in the ticker</div>
@@ -860,14 +888,7 @@
             const freqKey  = isTop5 ? 'top5_freq' : 'top10_freq';
             const curFreq  = isBanner ? (bannerFreqs[freqKey] || 'indefinite') : null;
 
-            const freqSelector = isBanner ? `
-                <div style="margin-bottom:8px;">
-                    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Show Frequency</div>
-                    <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
-                        onchange="setBannerFreq('${freqKey}', this.value)">
-                        ${BANNER_FREQ_OPTS.map(o => `<option value="${o.v}" ${curFreq === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
-                    </select>
-                </div>` : '';
+            const freqSelector = '';
 
             return `
             <div class="link-card">
@@ -918,8 +939,8 @@
             updateStatus(data.api_endpoint || '');
             renderServerDropdown(data.api_endpoint || '');
             if (data.allied_faction) { currentFaction = data.allied_faction; updateFactionPills(data.allied_faction); updatePhoneFactionPills(data.allied_faction); }
-            if (data.top5_freq  !== undefined) bannerFreqs.top5_freq  = data.top5_freq;
-            if (data.top10_freq !== undefined) bannerFreqs.top10_freq = data.top10_freq;
+            if (data.top5_freq  !== undefined) { bannerFreqs.top5_freq  = data.top5_freq;  const s5  = document.getElementById('top5FreqSelect');  if (s5)  s5.value  = data.top5_freq; }
+            if (data.top10_freq !== undefined) { bannerFreqs.top10_freq = data.top10_freq; const s10 = document.getElementById('top10FreqSelect'); if (s10) s10.value = data.top10_freq; }
         } catch(e) {
             document.getElementById('statusText').textContent = 'SERVER OFFLINE — Run start.bat first!';
             document.getElementById('statusTag').textContent  = 'OFFLINE';
