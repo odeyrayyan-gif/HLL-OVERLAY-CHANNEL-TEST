@@ -457,19 +457,15 @@
             </div>
         </div>
 
-        <!-- Frequency — options change based on target -->
-        <label class="input-label" style="margin-top:8px">Show Frequency</label>
-        <div class="msg-freq-group" id="freqGroup">
-            <div class="msg-freq-btn selected" data-freq="every_loop" data-show="ticker" onclick="selectFreq(this)">Every Loop</div>
-            <div class="msg-freq-btn" data-freq="every_3" data-show="ticker" onclick="selectFreq(this)">Every 3 Loops</div>
-            <div class="msg-freq-btn" data-freq="every_5" data-show="ticker" onclick="selectFreq(this)">Every 5 Loops</div>
-            <div class="msg-freq-btn" data-freq="every_10" data-show="ticker" onclick="selectFreq(this)">Every 10 Loops</div>
-            <div class="msg-freq-btn" data-freq="every_2min" onclick="selectFreq(this)">Every 2 Min</div>
-            <div class="msg-freq-btn" data-freq="every_5min" onclick="selectFreq(this)">Every 5 Min</div>
-            <div class="msg-freq-btn" data-freq="every_10min" data-show="banner" onclick="selectFreq(this)" style="display:none">Every 10 Min</div>
-            <div class="msg-freq-btn" data-freq="every_15min" data-show="banner" onclick="selectFreq(this)" style="display:none">Every 15 Min</div>
-            <div class="msg-freq-btn" data-freq="every_30min" data-show="banner" onclick="selectFreq(this)" style="display:none">Every 30 Min</div>
-            <div class="msg-freq-btn" data-freq="test_5sec" data-show="banner" onclick="selectFreq(this)" style="display:none;border-color:rgba(0,255,136,0.3);color:var(--green)">⚡ Test (5 sec)</div>
+        <!-- Frequency — only shown for message banner target -->
+        <div id="freqGroup" style="display:none;margin-top:8px;">
+            <label class="input-label">Show Frequency</label>
+            <div class="msg-freq-group">
+                <div class="msg-freq-btn selected" data-freq="every_10min" onclick="selectFreq(this)">Every 10 Min</div>
+                <div class="msg-freq-btn" data-freq="every_15min" onclick="selectFreq(this)">Every 15 Min</div>
+                <div class="msg-freq-btn" data-freq="every_30min" onclick="selectFreq(this)">Every 30 Min</div>
+                <div class="msg-freq-btn" data-freq="test_5sec" onclick="selectFreq(this)" style="border-color:rgba(0,255,136,0.3);color:var(--green)">⚡ Test (5 sec)</div>
+            </div>
         </div>
 
         <!-- Add button -->
@@ -846,9 +842,33 @@
         }
     }
 
+    const BANNER_FREQ_OPTS = [
+        { v: 'indefinite', l: 'Always On'  },
+        { v: '5min',       l: 'Every 5 Min'  },
+        { v: '10min',      l: 'Every 10 Min' },
+        { v: '15min',      l: 'Every 15 Min' },
+        { v: '20min',      l: 'Every 20 Min' },
+        { v: '25min',      l: 'Every 25 Min' },
+    ];
+
     function renderLinks() {
         document.getElementById('output').innerHTML = VIEWS.map(v => {
             const url = `${SERVER}/${v.f}`;
+            const isTop5  = v.f === 'DO_NOT_EDIT_top5_scroll_banner.html';
+            const isTop10 = v.f === 'DO_NOT_EDIT_top10_scroll_banner.html';
+            const isBanner = isTop5 || isTop10;
+            const freqKey  = isTop5 ? 'top5_freq' : 'top10_freq';
+            const curFreq  = isBanner ? (bannerFreqs[freqKey] || 'indefinite') : null;
+
+            const freqSelector = isBanner ? `
+                <div style="margin-bottom:8px;">
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Show Frequency</div>
+                    <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
+                        onchange="setBannerFreq('${freqKey}', this.value)">
+                        ${BANNER_FREQ_OPTS.map(o => `<option value="${o.v}" ${curFreq === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
+                    </select>
+                </div>` : '';
+
             return `
             <div class="link-card">
                 <div class="card-icon">${v.icon}</div>
@@ -857,9 +877,24 @@
                     <div class="card-url" style="margin-bottom:0;flex:1">${url}</div>
                     <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;white-space:nowrap;">${v.w} × ${v.h}</div>
                 </div>
+                ${freqSelector}
                 <button class="copy-btn" onclick="copyUrl(this, '${url}')">Copy OBS URL</button>
             </div>`;
         }).join('');
+    }
+
+    let bannerFreqs = { top5_freq: 'indefinite', top10_freq: 'indefinite' };
+
+    async function setBannerFreq(key, val) {
+        bannerFreqs[key] = val;
+        try {
+            await fetch(`${SERVER}/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [key]: val })
+            });
+        } catch(e) {}
+        renderLinks();
     }
 
     function copyUrl(btn, url) {
@@ -883,6 +918,8 @@
             updateStatus(data.api_endpoint || '');
             renderServerDropdown(data.api_endpoint || '');
             if (data.allied_faction) { currentFaction = data.allied_faction; updateFactionPills(data.allied_faction); updatePhoneFactionPills(data.allied_faction); }
+            if (data.top5_freq  !== undefined) bannerFreqs.top5_freq  = data.top5_freq;
+            if (data.top10_freq !== undefined) bannerFreqs.top10_freq = data.top10_freq;
         } catch(e) {
             document.getElementById('statusText').textContent = 'SERVER OFFLINE — Run start.bat first!';
             document.getElementById('statusTag').textContent  = 'OFFLINE';
@@ -930,9 +967,7 @@
             return;
         }
         const FREQ_OPTS = [
-            { v: 'every_loop',  l: 'Every loop'    },
-            { v: 'every_3',     l: 'Every 3 loops' },
-            { v: 'every_5',     l: 'Every 5 loops' },
+            { v: 'every_loop',  l: 'Always' },
             { v: 'every_10',    l: 'Every 10 loops'},
             { v: 'every_2min',  l: 'Every 2 min'   },
             { v: 'every_5min',  l: 'Every 5 min'   },
@@ -1151,7 +1186,7 @@
     });
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
     let selectedPlatform = { platform: 'general', icon: 'general' };
-    let selectedFreq   = 'every_loop';
+    let selectedFreq   = 'every_loop'; // always 'every_loop' for ticker, timer-based for banner
     let selectedTarget = 'ticker';
 
 
@@ -1228,21 +1263,17 @@
     }
 
     function updateFreqOptions(target) {
-        const isTicker = target === 'ticker';
-        // Show/hide loop-only options
-        document.querySelectorAll('.msg-freq-btn[data-show="ticker"]').forEach(b => {
-            b.style.display = isTicker ? '' : 'none';
-        });
-        // Show/hide banner-only options
-        document.querySelectorAll('.msg-freq-btn[data-show="banner"]').forEach(b => {
-            b.style.display = isTicker ? 'none' : '';
-        });
-        // Reset selection to first visible option
-        const first = document.querySelector('.msg-freq-btn:not([style*="display: none"]):not([style*="display:none"])');
-        if (first) {
-            document.querySelectorAll('.msg-freq-btn').forEach(b => b.classList.remove('selected'));
-            first.classList.add('selected');
-            selectedFreq = first.dataset.freq;
+        const isBanner = target === 'banner';
+        // Show freq group only for banner
+        document.getElementById('freqGroup').style.display = isBanner ? '' : 'none';
+        // Reset freq
+        if (isBanner) {
+            selectedFreq = 'every_10min';
+            document.querySelectorAll('.msg-freq-btn').forEach(b => {
+                b.classList.toggle('selected', b.dataset.freq === 'every_10min');
+            });
+        } else {
+            selectedFreq = 'every_loop';
         }
     }
 
