@@ -33,21 +33,6 @@ UPDATABLE_FILES = [
     "start.bat",
     "README.txt",
 ]
-REMOVED_FILES = [
-    "DO_NOT_EDIT_player_map.html",
-]
-
-def remove_deprecated_files():
-    removed = []
-    for fname in REMOVED_FILES:
-        try:
-            if os.path.exists(fname):
-                os.remove(fname)
-                removed.append(fname)
-        except Exception as e:
-            print(f"  [!] Failed to remove deprecated file {fname}: {e}")
-    if removed:
-        print(f"  Removed deprecated files: {', '.join(removed)}")
 
 def get_local_version():
     try:
@@ -78,7 +63,6 @@ def download_file(filename):
         return False
 
 def check_for_updates():
-    remove_deprecated_files()
     print("  Checking for updates...")
     local   = get_local_version()
     remote  = get_remote_version()
@@ -264,6 +248,23 @@ class HLLHandler(SimpleHTTPRequestHandler):
                 self.send_json({"result": None, "error": str(e)})
             return
         # ── Serve static files normally ──
+        # Add no-cache headers for HTML files so updates show immediately
+        if path.endswith('.html'):
+            self.send_response(200)
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+            self.send_cors_headers()
+            try:
+                with open(path.lstrip('/'), 'rb') as f:
+                    content = f.read()
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', len(content))
+                self.end_headers()
+                self.wfile.write(content)
+            except:
+                super().do_GET()
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -320,7 +321,7 @@ class HLLHandler(SimpleHTTPRequestHandler):
             with open(CONFIG_FILE, "r") as f:
                 return json.load(f)
         except:
-            return {"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}
+            return {"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": [], "top5_freq": "indefinite", "top10_freq": "indefinite"}
 
     def write_config(self, data):
         existing = self.read_config()
@@ -358,7 +359,7 @@ if __name__ == "__main__":
     # Make sure config and player files exist
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w") as f:
-            json.dump({"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}, f, indent=2)
+            json.dump({"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": [], "top5_freq": "indefinite", "top10_freq": "indefinite"}, f, indent=2)
     if not os.path.exists(PLAYER_FILE):
         with open(PLAYER_FILE, "w") as f:
             f.write("")
