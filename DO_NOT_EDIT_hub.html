@@ -104,6 +104,9 @@
         .msg-platform-btn:hover { border-color: var(--border-bright); }
         .msg-platform-btn.selected { border-color: var(--red); background: rgba(172,46,46,0.1); }
         .msg-freq-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+        .stat-mode-btn { padding: 7px 4px; background: #070a0f; border: 1px solid #2d3748; border-radius: 6px; color: #718096; font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; text-align: center; cursor: pointer; transition: all 0.15s; }
+        .stat-mode-btn:hover { border-color: #4a5568; color: #a0aec0; }
+        .stat-mode-btn.selected { border-color: var(--red); background: rgba(172,46,46,0.1); color: white; }
         .msg-freq-btn {
             padding: 8px; background: #070a0f; border: 1px solid var(--border);
             border-radius: 6px; cursor: pointer; text-align: center; transition: all 0.2s;
@@ -394,6 +397,16 @@
             <input type="text" id="player" placeholder="Type part of a player name..." oninput="onPlayerInput()" autocomplete="off">
             <div id="playerSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:#0d1117;border:1px solid #2e3a48;border-radius:6px;margin-top:4px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
         </div>
+        <div style="margin-top:12px;">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Stat Display</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;" id="statModeGroup">
+                <div class="stat-mode-btn selected" data-stat="combat"  onclick="setStatMode(this)">Combat</div>
+                <div class="stat-mode-btn" data-stat="defense" onclick="setStatMode(this)">Defense</div>
+                <div class="stat-mode-btn" data-stat="support" onclick="setStatMode(this)">Support</div>
+                <div class="stat-mode-btn" data-stat="offense" onclick="setStatMode(this)">Offense</div>
+                <div class="stat-mode-btn" data-stat="all"     onclick="setStatMode(this)">All</div>
+            </div>
+        </div>
     </div>
 
     <!-- OBS LINKS -->
@@ -589,6 +602,13 @@
             <div class="phone-label-num">4</div>
             Spotlight Player
             <span class="phone-hint" id="phoneSpotlightHint">type to search</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px;" id="phoneStatModeGroup">
+            <div class="stat-mode-btn selected" data-stat="combat"  onclick="setStatMode(this, true)">CMB</div>
+            <div class="stat-mode-btn" data-stat="defense" onclick="setStatMode(this, true)">DEF</div>
+            <div class="stat-mode-btn" data-stat="support" onclick="setStatMode(this, true)">SUP</div>
+            <div class="stat-mode-btn" data-stat="offense" onclick="setStatMode(this, true)">OFF</div>
+            <div class="stat-mode-btn" data-stat="all"     onclick="setStatMode(this, true)">ALL</div>
         </div>
         <input type="text" class="phone-input" id="phone-player"
             placeholder="Part of player name..."
@@ -939,6 +959,12 @@
             updateStatus(data.api_endpoint || '');
             renderServerDropdown(data.api_endpoint || '');
             if (data.allied_faction) { currentFaction = data.allied_faction; updateFactionPills(data.allied_faction); updatePhoneFactionPills(data.allied_faction); }
+            if (data.stat_mode) {
+                currentStatMode = data.stat_mode;
+                document.querySelectorAll('.stat-mode-btn').forEach(b => {
+                    b.classList.toggle('selected', b.dataset.stat === data.stat_mode);
+                });
+            }
             if (data.top5_freq  !== undefined) { bannerFreqs.top5_freq  = data.top5_freq;  const s5  = document.getElementById('top5FreqSelect');  if (s5)  s5.value  = data.top5_freq; }
             if (data.top10_freq !== undefined) { bannerFreqs.top10_freq = data.top10_freq; const s10 = document.getElementById('top10FreqSelect'); if (s10) s10.value = data.top10_freq; }
         } catch(e) {
@@ -1206,6 +1232,23 @@
         });
     });
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
+    let currentStatMode = 'combat';
+
+    function setStatMode(el, isPhone) {
+        const stat = el.dataset.stat;
+        currentStatMode = stat;
+        // Sync both desktop and phone buttons
+        document.querySelectorAll('.stat-mode-btn').forEach(b => {
+            b.classList.toggle('selected', b.dataset.stat === stat);
+        });
+        // Save to server
+        fetch(`${SERVER}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stat_mode: stat })
+        }).catch(() => {});
+    }
+
     let selectedPlatform = { platform: 'general', icon: 'general' };
     let selectedFreq   = 'every_loop'; // always 'every_loop' for ticker, timer-based for banner
     let selectedTarget = 'ticker';
