@@ -12,7 +12,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # ── AUTO-UPDATER ──────────────────────────────────────────────────────────────
-GITHUB_RAW   = "https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY-TEST/main/"
+GITHUB_RAW   = "https://raw.githubusercontent.com/odeyrayyan-gif/HLL-OVERLAY/main/"
 VERSION_FILE = "version.txt"
 
 UPDATABLE_FILES = [
@@ -24,6 +24,7 @@ UPDATABLE_FILES = [
     "DO_NOT_EDIT_player_spotlight.html",
     "DO_NOT_EDIT_top5_scroll_banner.html",
     "DO_NOT_EDIT_top10_scroll_banner.html",
+    "DO_NOT_EDIT_top10_scoreboard.html",
     "DO_NOT_EDIT_killstreaks.html",
     "DO_NOT_EDIT_killfeed.html",
     "DO_NOT_EDIT_tank_scoreboard.html",
@@ -33,6 +34,23 @@ UPDATABLE_FILES = [
     "start.bat",
     "README.txt",
 ]
+
+# ── Counter namespace — unique to this overlay ──
+COUNTER_NS = "hll-overlay-odey"
+
+def ping_counter(key):
+    """Fire-and-forget hit to countapi.xyz. Never blocks or crashes server."""
+    try:
+        import threading
+        def _ping():
+            try:
+                url = f"https://api.countapi.xyz/hit/{COUNTER_NS}/{key}"
+                urllib.request.urlopen(url, timeout=4)
+            except Exception:
+                pass  # Silent — counter is optional, never interrupts server
+        threading.Thread(target=_ping, daemon=True).start()
+    except Exception:
+        pass
 
 def get_local_version():
     try:
@@ -93,6 +111,8 @@ def check_for_updates():
     with open(VERSION_FILE, "w") as f:
         f.write(remote)
 
+    if success:
+        ping_counter("updates")  # count each update event
     print(f"  Updated {len(success)} files.")
     if failed:
         print(f"  Failed: {', '.join(failed)}")
@@ -204,13 +224,53 @@ class HLLHandler(SimpleHTTPRequestHandler):
             return
         # ── /config — return current settings as JSON ──
         if path == "/config":
-            self.send_json(self.read_config())
+            cfg = self.read_config()
+            cfg["player"] = self.read_player()
+            self.send_json(cfg)
             return
         # ── /player — return current spotlight player name ──
         if path == "/player":
             name = self.read_player()
             self.send_json({"player": name})
             return
+        # ── /gamestate — proxy get_gamestate from CRCON ──
+        if path == "/gamestate":
+            try:
+                cfg = self.read_config()
+                endpoint = cfg.get("api_endpoint", "")
+                if not endpoint:
+                    self.send_json({"result": None})
+                    return
+                from urllib.parse import urlparse
+                base_url = "{0.scheme}://{0.netloc}".format(urlparse(endpoint))
+                url = base_url + "/api/get_gamestate?t=" + str(os.times()[4])
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    data = json.loads(r.read().decode())
+                self.send_json(data)
+            except Exception as e:
+                self.send_json({"result": None, "error": str(e)})
+            return
+
+        # ── /teamview — proxy get_team_view from CRCON ──
+        if path == "/teamview":
+            try:
+                cfg = self.read_config()
+                endpoint = cfg.get("api_endpoint", "")
+                if not endpoint:
+                    self.send_json({"result": None})
+                    return
+                from urllib.parse import urlparse
+                base_url = "{0.scheme}://{0.netloc}".format(urlparse(endpoint))
+                url = base_url + "/api/get_team_view?t=" + str(os.times()[4])
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    data = json.loads(r.read().decode())
+                self.send_json(data)
+            except Exception as e:
+                self.send_json({"result": None, "error": str(e)})
+            return
+
         # ── /players — proxy live player list from CRCON to avoid CORS ──
         if path == "/players":
             try:
@@ -248,6 +308,23 @@ class HLLHandler(SimpleHTTPRequestHandler):
                 self.send_json({"result": None, "error": str(e)})
             return
         # ── Serve static files normally ──
+        # Add no-cache headers for HTML files so updates show immediately
+        if path.endswith('.html'):
+            self.send_response(200)
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+            self.send_cors_headers()
+            try:
+                with open(path.lstrip('/'), 'rb') as f:
+                    content = f.read()
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', len(content))
+                self.end_headers()
+                self.wfile.write(content)
+            except:
+                super().do_GET()
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -300,17 +377,31 @@ class HLLHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def read_config(self):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-        except:
-            return {"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}
+        # Retry up to 3 times to handle race conditions during writes
+        for attempt in range(3):
+            try:
+                with open(CONFIG_FILE, "r") as f:
+                    content = f.read().strip()
+                if not content:
+                    import time; time.sleep(0.05)
+                    continue
+                data = json.loads(content)
+                # Only return if we got a valid config with expected fields
+                if isinstance(data, dict):
+                    return data
+            except (json.JSONDecodeError, IOError):
+                import time; time.sleep(0.05)
+        return {"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": [], "top5_freq": "indefinite", "top10_freq": "indefinite", "stat_mode": "combat", "banner_stat_mode": "combat"}
 
     def write_config(self, data):
         existing = self.read_config()
         existing.update(data)
-        with open(CONFIG_FILE, "w") as f:
+        # Atomic write — write to temp file then rename to avoid partial reads
+        tmp = CONFIG_FILE + ".tmp"
+        with open(tmp, "w") as f:
             json.dump(existing, f, indent=2)
+        import os
+        os.replace(tmp, CONFIG_FILE)
 
     def read_player(self):
         try:
@@ -337,12 +428,13 @@ def get_local_ip():
 
 if __name__ == "__main__":
     # ── Check for updates before starting ──
+    ping_counter("starts")   # count every server start
     check_for_updates()
 
     # Make sure config and player files exist
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w") as f:
-            json.dump({"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": []}, f, indent=2)
+            json.dump({"api_endpoint": "", "api_logs_endpoint": "", "swap_sides": False, "player": "", "allied_faction": "ALLIES", "ticker_messages": [], "saved_servers": [], "top5_freq": "indefinite", "top10_freq": "indefinite", "stat_mode": "combat", "banner_stat_mode": "combat"}, f, indent=2)
     if not os.path.exists(PLAYER_FILE):
         with open(PLAYER_FILE, "w") as f:
             f.write("")
