@@ -87,6 +87,9 @@
         .card-url { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--blue); margin-bottom: 12px; opacity: 0.7; }
         .copy-btn { width: 100%; background: transparent; color: var(--text-mid); border: 1px solid var(--border); padding: 8px; border-radius: 5px; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; cursor: pointer; transition: all 0.2s; }
         .copy-btn:hover { background: var(--red); border-color: var(--red); color: white; }
+        .score-btn { padding: 10px 24px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+        .score-btn:hover { border-color: var(--border-bright); color: #fff; }
+        .score-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
         .copy-btn.copied { background: rgba(0,255,136,0.1); border-color: var(--green); color: var(--green); }
 
         .footer { margin-top: 36px; text-align: center; font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--text-dim); letter-spacing: 3px; text-transform: uppercase; }
@@ -104,6 +107,9 @@
         .msg-platform-btn:hover { border-color: var(--border-bright); }
         .msg-platform-btn.selected { border-color: var(--red); background: rgba(172,46,46,0.1); }
         .msg-freq-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+        .stat-mode-btn { padding: 7px 4px; background: #070a0f; border: 1px solid #2d3748; border-radius: 6px; color: #718096; font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; text-align: center; cursor: pointer; transition: all 0.15s; }
+        .stat-mode-btn:hover { border-color: #4a5568; color: #a0aec0; }
+        .stat-mode-btn.selected { border-color: var(--red); background: rgba(172,46,46,0.1); color: white; }
         .msg-freq-btn {
             padding: 8px; background: #070a0f; border: 1px solid var(--border);
             border-radius: 6px; cursor: pointer; text-align: center; transition: all 0.2s;
@@ -394,13 +400,36 @@
             <input type="text" id="player" placeholder="Type part of a player name..." oninput="onPlayerInput()" autocomplete="off">
             <div id="playerSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:#0d1117;border:1px solid #2e3a48;border-radius:6px;margin-top:4px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
         </div>
+        <div style="margin-top:12px;">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Stat Display</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;" id="statModeGroup">
+                <div class="stat-mode-btn selected" data-stat="combat"  onclick="setStatMode(this)">Combat</div>
+                <div class="stat-mode-btn" data-stat="defense" onclick="setStatMode(this)">Defense</div>
+                <div class="stat-mode-btn" data-stat="support" onclick="setStatMode(this)">Support</div>
+                <div class="stat-mode-btn" data-stat="offense" onclick="setStatMode(this)">Offense</div>
+            </div>
+        </div>
     </div>
 
     <!-- OBS LINKS -->
     <!-- 5: TICKER MESSAGES -->
-    <div class="section">
+        <div class="section">
         <div class="section-header">
             <div class="section-num">5</div>
+            <div class="section-title">Top 10 Score Mode</div>
+            <div class="section-hint" id="scoreModeHint">Controls Top 10 Scoreboard overlay</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="score-btn active" data-mode="combat"  onclick="setScoreMode('combat')">Combat</button>
+            <button class="score-btn"        data-mode="offense" onclick="setScoreMode('offense')">Offensive</button>
+            <button class="score-btn"        data-mode="defense" onclick="setScoreMode('defense')">Defensive</button>
+            <button class="score-btn"        data-mode="support" onclick="setScoreMode('support')">Support</button>
+        </div>
+    </div>
+
+<div class="section">
+        <div class="section-header">
+            <div class="section-num">6</div>
             <div class="section-title">Ticker Messages</div>
             <div class="section-hint" id="msgHint">Injected into Top 5 &amp; Top 10 scroll banners</div>
         </div>
@@ -474,6 +503,43 @@
         <!-- Saved messages list -->
         <div class="msg-list" id="msgList"></div>
 
+        <!-- Banner frequency controls -->
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Scroll Banner Stat</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;" id="bannerStatModeGroup">
+                <div class="stat-mode-btn selected" data-stat="combat"  onclick="setBannerStat(this)">Combat</div>
+                <div class="stat-mode-btn" data-stat="defense" onclick="setBannerStat(this)">Defense</div>
+                <div class="stat-mode-btn" data-stat="support" onclick="setBannerStat(this)">Support</div>
+                <div class="stat-mode-btn" data-stat="offense" onclick="setBannerStat(this)">Offense</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;">
+            <div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Top 5 Banner Frequency</div>
+                <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
+                    onchange="setBannerFreq('top5_freq', this.value)" id="top5FreqSelect">
+                    <option value="indefinite">Always On</option>
+                    <option value="5min">Every 5 Min</option>
+                    <option value="10min">Every 10 Min</option>
+                    <option value="15min">Every 15 Min</option>
+                    <option value="20min">Every 20 Min</option>
+                    <option value="25min">Every 25 Min</option>
+                </select>
+            </div>
+            <div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Top 10 Banner Frequency</div>
+                <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
+                    onchange="setBannerFreq('top10_freq', this.value)" id="top10FreqSelect">
+                    <option value="indefinite">Always On</option>
+                    <option value="5min">Every 5 Min</option>
+                    <option value="10min">Every 10 Min</option>
+                    <option value="15min">Every 15 Min</option>
+                    <option value="20min">Every 20 Min</option>
+                    <option value="25min">Every 25 Min</option>
+                </select>
+            </div>
+        </div>
+
         <!-- Live preview -->
         <div class="msg-preview-wrap">
             <div class="msg-preview-label" id="msgPreviewLabel">Live Preview — how it looks in the ticker</div>
@@ -488,7 +554,7 @@
 
     <div class="section">
         <div class="overlays-header">
-            <div class="section-num">6</div>
+            <div class="section-num">7</div>
             <div class="overlays-title">OBS Browser Sources</div>
             <div class="overlays-line"></div>
             <div class="overlays-count">11 OVERLAYS</div>
@@ -511,9 +577,9 @@
         <div class="phone-status-text" id="phoneStatus">Loading...</div>
     </div>
 
-    <div class="phone-card">
+<div class="phone-card">
         <div class="phone-label">
-            <div class="phone-label-num">2</div>
+            <div class="phone-label-num">1</div>
             Team Side Alignment
             <span class="phone-hint" id="phoneSwapHint">tap to change</span>
         </div>
@@ -539,7 +605,7 @@
 
     <div class="phone-card">
         <div class="phone-label">
-            <div class="phone-label-num">3</div>
+            <div class="phone-label-num">2</div>
             Allied Faction
             <span class="phone-hint" id="phoneFactionHint">tap to select</span>
         </div>
@@ -556,11 +622,17 @@
         </div>
     </div>
 
-    <div class="phone-card">
+        <div class="phone-card">
         <div class="phone-label">
-            <div class="phone-label-num">4</div>
+            <div class="phone-label-num">3</div>
             Spotlight Player
             <span class="phone-hint" id="phoneSpotlightHint">type to search</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;" id="phoneStatModeGroup">
+            <div class="stat-mode-btn selected" data-stat="combat"  onclick="setStatMode(this, true)">CMB</div>
+            <div class="stat-mode-btn" data-stat="defense" onclick="setStatMode(this, true)">DEF</div>
+            <div class="stat-mode-btn" data-stat="support" onclick="setStatMode(this, true)">SUP</div>
+            <div class="stat-mode-btn" data-stat="offense" onclick="setStatMode(this, true)">OFF</div>
         </div>
         <input type="text" class="phone-input" id="phone-player"
             placeholder="Part of player name..."
@@ -569,6 +641,22 @@
         <div id="phoneSuggestions" style="display:none;background:#0d1117;border:1px solid #2e3a48;border-radius:6px;margin-top:4px;overflow:hidden;"></div>
         <button class="phone-clear" onclick="clearPhonePlayer()">✕ Clear — Show Top Killer</button>
     </div>
+
+    <div class="phone-card">
+        <div class="phone-label">
+            <div class="phone-label-num">4</div>
+            Top 10 Score Mode
+            <span class="phone-hint" id="phoneScoreModeHint">tap to switch</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;" id="phoneScoreModeGroup">
+            <div class="stat-mode-btn" data-mode="combat"  onclick="setPhoneScoreMode(this)">COMBAT</div>
+            <div class="stat-mode-btn" data-mode="offense" onclick="setPhoneScoreMode(this)">OFFENSIVE</div>
+            <div class="stat-mode-btn" data-mode="defense" onclick="setPhoneScoreMode(this)">DEFENSIVE</div>
+            <div class="stat-mode-btn" data-mode="support" onclick="setPhoneScoreMode(this)">SUPPORT</div>
+        </div>
+    </div>
+
+    
 
     <!-- Phone: Ticker Messages -->
     <div class="phone-card" id="phone-msg-card">
@@ -591,13 +679,14 @@
         { n: "Player Spotlight",     f: "DO_NOT_EDIT_player_spotlight.html",    icon: "🎯",  w: 1920, h: 1080 },
         { n: "Top 5 Scroll Banner",  f: "DO_NOT_EDIT_top5_scroll_banner.html",  icon: "📊",  w: 1920, h: 60   },
         { n: "Top 10 Scroll Banner", f: "DO_NOT_EDIT_top10_scroll_banner.html", icon: "📋",  w: 1920, h: 60   },
+        { n: "Top 10 Scoreboard",   f: "DO_NOT_EDIT_top10_scoreboard.html",   icon: "🏆",  w: 1920, h: 1080 },
         { n: "Live Map",             f: "DO_NOT_EDIT_map_overlay.html",         icon: "🗺️",  w: 1920, h: 1080 },
         { n: "Kill Streaks",         f: "DO_NOT_EDIT_killstreaks.html",         icon: "💀",  w: 1920, h: 1080 },
         { n: "Kill Feed",            f: "DO_NOT_EDIT_killfeed.html",            icon: "🎯",  w: 1920, h: 1080 },
         { n: "Tank Scoreboard",      f: "DO_NOT_EDIT_tank_scoreboard.html",     icon: "🛡️",  w: 1920, h: 1080 },
         { n: "Melee Leaderboard",    f: "DO_NOT_EDIT_melee_leaderboard.html",   icon: "🔪",  w: 3840, h: 2160 },
         { n: "Message Banner",       f: "DO_NOT_EDIT_message_banner.html",      icon: "💬",  w: 1920, h: 1080 },
-        { n: "Player Map",           f: "DO_NOT_EDIT_player_map.html",          icon: "🗺️",  w: 3840, h: 2160 },
+
     ];
 
     let saveTimer = null;
@@ -630,6 +719,17 @@
 
     // ── Write player name to server ──
     async function savePlayer(hintId) {
+        // Sync desktop <-> phone player field
+        const desktopVal = document.getElementById('player')?.value || '';
+        const phoneVal   = document.getElementById('phone-player')?.value || '';
+        if (hintId === 'spotlightHint' && phoneVal !== desktopVal) {
+            const ph = document.getElementById('phone-player');
+            if (ph) ph.value = desktopVal;
+        }
+        if (hintId === 'phoneSpotlightHint') {
+            const dp = document.getElementById('player');
+            if (dp) dp.value = phoneVal;
+        }
         const hint = document.getElementById(hintId);
         hint.textContent = 'SAVING...';
         hint.style.color = '#718096';
@@ -860,14 +960,7 @@
             const freqKey  = isTop5 ? 'top5_freq' : 'top10_freq';
             const curFreq  = isBanner ? (bannerFreqs[freqKey] || 'indefinite') : null;
 
-            const freqSelector = isBanner ? `
-                <div style="margin-bottom:8px;">
-                    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a5568;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">Show Frequency</div>
-                    <select style="width:100%;padding:6px 8px;background:#070a0f;border:1px solid #2d3748;color:#a0aec0;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;outline:none;letter-spacing:1px;"
-                        onchange="setBannerFreq('${freqKey}', this.value)">
-                        ${BANNER_FREQ_OPTS.map(o => `<option value="${o.v}" ${curFreq === o.v ? 'selected' : ''}>${o.l}</option>`).join('')}
-                    </select>
-                </div>` : '';
+            const freqSelector = '';
 
             return `
             <div class="link-card">
@@ -906,8 +999,48 @@
     }
 
     // ── Load saved config from server on startup ──
-    async function loadConfig() {
+    async function setPhoneScoreMode(el) {
+            const mode = el.dataset.mode;
+            // Optimistically update UI
+            document.querySelectorAll('#phoneScoreModeGroup .stat-mode-btn').forEach(b => b.classList.remove('selected'));
+            el.classList.add('selected');
+            const hint = document.getElementById('phoneScoreModeHint');
+            const ok = await setScoreMode(mode);
+            if (hint) {
+                if (ok) {
+                    hint.textContent = 'Saved!';
+                } else {
+                    hint.textContent = 'Save failed — check connection';
+                    el.classList.remove('selected'); // revert
+                }
+                setTimeout(() => hint.textContent = 'tap to switch', 2500);
+            }
+        }
+
+        async function setScoreMode(mode) {
+            const _base = `http://${window.location.hostname}:3000`;
+            try {
+                const cfg = await fetch(_base+'/config',{cache:'no-store'}).then(r=>r.json());
+                cfg.score_mode = mode;
+                const res = await fetch(_base+'/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg)});
+                if (!res.ok) throw new Error('Server returned ' + res.status);
+                document.querySelectorAll('.score-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+                document.querySelectorAll('#phoneScoreModeGroup .stat-mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === mode));
+                const hint = document.getElementById('scoreModeHint');
+                if (hint) { hint.textContent = 'Saved — ' + mode.charAt(0).toUpperCase() + mode.slice(1) + ' Score'; setTimeout(() => hint.textContent = 'Controls Top 10 Scoreboard overlay', 2000); }
+                return true;
+            } catch(e) {
+                console.error('setScoreMode failed:', e);
+                return false;
+            }
+        }
+
+        async function loadConfig() {
         try {
+            const cfg2 = await fetch(`http://${window.location.hostname}:3000/config`,{cache:'no-store'}).then(r=>r.json()).catch(()=>({}));
+            const savedMode = cfg2.score_mode || 'combat';
+            document.querySelectorAll('.score-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === savedMode));
+            document.querySelectorAll('#phoneScoreModeGroup .stat-mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === savedMode));
             const res  = await fetch(`${SERVER}/config`);
             const data = await res.json();
             document.getElementById('api').value    = data.api_endpoint || '';
@@ -918,8 +1051,20 @@
             updateStatus(data.api_endpoint || '');
             renderServerDropdown(data.api_endpoint || '');
             if (data.allied_faction) { currentFaction = data.allied_faction; updateFactionPills(data.allied_faction); updatePhoneFactionPills(data.allied_faction); }
-            if (data.top5_freq  !== undefined) bannerFreqs.top5_freq  = data.top5_freq;
-            if (data.top10_freq !== undefined) bannerFreqs.top10_freq = data.top10_freq;
+            if (data.stat_mode) {
+                currentStatMode = data.stat_mode;
+                document.querySelectorAll('#statModeGroup .stat-mode-btn, #phoneStatModeGroup .stat-mode-btn').forEach(b => {
+                    b.classList.toggle('selected', b.dataset.stat === data.stat_mode);
+                });
+            }
+            if (data.banner_stat_mode) {
+                currentBannerStat = data.banner_stat_mode;
+                document.querySelectorAll('#bannerStatModeGroup .stat-mode-btn').forEach(b => {
+                    b.classList.toggle('selected', b.dataset.stat === data.banner_stat_mode);
+                });
+            }
+            if (data.top5_freq  !== undefined) { bannerFreqs.top5_freq  = data.top5_freq;  const s5  = document.getElementById('top5FreqSelect');  if (s5)  s5.value  = data.top5_freq; }
+            if (data.top10_freq !== undefined) { bannerFreqs.top10_freq = data.top10_freq; const s10 = document.getElementById('top10FreqSelect'); if (s10) s10.value = data.top10_freq; }
         } catch(e) {
             document.getElementById('statusText').textContent = 'SERVER OFFLINE — Run start.bat first!';
             document.getElementById('statusTag').textContent  = 'OFFLINE';
@@ -1113,7 +1258,7 @@
             // ── Sync desktop player input (skip if user is actively typing) ──
             const desktopInput = document.getElementById('player');
             if (document.activeElement !== desktopInput) {
-                desktopInput.value = data.player || '';
+                desktopInput.value = data.player ?? '';
             }
             if (data.api_endpoint) {
                 try {
@@ -1138,7 +1283,13 @@
             // ── Sync phone player input (skip if user is actively typing) ──
             const phoneInput = document.getElementById('phone-player');
             if (phoneInput && document.activeElement !== phoneInput) {
-                phoneInput.value = data.player || '';
+                phoneInput.value = data.player ?? '';
+            }
+
+            // ── Sync score mode buttons (desktop + phone) ──
+            if (data.score_mode) {
+                document.querySelectorAll('.score-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === data.score_mode));
+                document.querySelectorAll('#phoneScoreModeGroup .stat-mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === data.score_mode));
             }
 
             // ── Phone status bar ──
@@ -1174,9 +1325,23 @@
         }
     }
 
+    let syncFailCount = 0;
+    const _origSyncAllUI = syncAllUI;
+    async function syncAllUIWithRetry() {
+        try {
+            await _origSyncAllUI();
+            syncFailCount = 0;
+        } catch(e) {
+            syncFailCount++;
+            if (syncFailCount >= 3) {
+                updateStatus('');
+            }
+        }
+    }
+
     // Sync all UI every 2 seconds on every device
-    syncAllUI();
-    setInterval(syncAllUI, 2000);
+    syncAllUIWithRetry();
+    setInterval(syncAllUIWithRetry, 2000);
     window.addEventListener('load', function() {
         document.addEventListener('click', function(e) {
             const box = document.getElementById('playerSuggestions');
@@ -1185,6 +1350,38 @@
         });
     });
     // ── TICKER MESSAGES ──────────────────────────────────────────────────
+    let currentStatMode = 'combat';
+
+    let currentBannerStat = 'combat';
+
+    function setBannerStat(el) {
+        const stat = el.dataset.stat;
+        currentBannerStat = stat;
+        document.querySelectorAll('#bannerStatModeGroup .stat-mode-btn').forEach(b => {
+            b.classList.toggle('selected', b.dataset.stat === stat);
+        });
+        fetch(`${SERVER}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ banner_stat_mode: stat })
+        }).catch(() => {});
+    }
+
+    function setStatMode(el, isPhone) {
+        const stat = el.dataset.stat;
+        currentStatMode = stat;
+        // Sync both desktop and phone buttons
+        document.querySelectorAll('.stat-mode-btn').forEach(b => {
+            b.classList.toggle('selected', b.dataset.stat === stat);
+        });
+        // Save to server
+        fetch(`${SERVER}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stat_mode: stat })
+        }).catch(() => {});
+    }
+
     let selectedPlatform = { platform: 'general', icon: 'general' };
     let selectedFreq   = 'every_loop'; // always 'every_loop' for ticker, timer-based for banner
     let selectedTarget = 'ticker';
