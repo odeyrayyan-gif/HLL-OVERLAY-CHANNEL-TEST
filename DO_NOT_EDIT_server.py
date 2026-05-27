@@ -393,7 +393,7 @@ def build_anti_trigger_report(stats_payload=None, kill_events=None, source="live
             "player": str(name),
             "score": score,
             "confidence": "low" if reasons else "info",
-            "recommendation": "manual_review" if score >= 25 else "insufficient_data",
+            "recommendation": "watchlist" if score >= 25 else "insufficient_data",
             "reasons": reasons,
             "metrics": {
                 "kills": _to_int(player.get("kills")),

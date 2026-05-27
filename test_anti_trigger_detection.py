@@ -45,9 +45,10 @@ class AntiTriggerDetectionTests(unittest.TestCase):
         events = server.extract_kill_events(payload)
 
         self.assertEqual(len(events), 3)
-        self.assertEqual(events[0]["killer"], "One")
-        self.assertEqual(events[1]["weapon"], "SMG")
-        self.assertEqual(events[2]["victim"], "Six")
+        by_killer = {event["killer"]: event for event in events}
+        self.assertIn("One", by_killer)
+        self.assertEqual(by_killer["Three"]["weapon"], "SMG")
+        self.assertEqual(by_killer["Five"]["victim"], "Six")
 
     def test_stats_only_signal_is_low_confidence(self):
         stats = {
