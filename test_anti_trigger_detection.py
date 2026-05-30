@@ -65,6 +65,14 @@ class AntiTriggerDetectionTests(unittest.TestCase):
         self.assertEqual(candidate["confidence"], "low")
         self.assertEqual(candidate["recommendation"], "watchlist")
 
+    def test_windows_client_disconnects_are_treated_as_normal(self):
+        err = ConnectionAbortedError("connection aborted")
+        err.winerror = 10053
+
+        self.assertTrue(server.is_client_disconnect_error(err))
+        self.assertTrue(server.is_client_disconnect_error(BrokenPipeError()))
+        self.assertFalse(server.is_client_disconnect_error(OSError("disk failed")))
+
 
 if __name__ == "__main__":
     unittest.main()

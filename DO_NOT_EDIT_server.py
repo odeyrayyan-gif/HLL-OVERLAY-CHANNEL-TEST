@@ -516,6 +516,25 @@ def build_anti_trigger_report(stats_payload=None, kill_events=None, source="live
         ],
     }
 
+def is_client_disconnect_error(err):
+    if isinstance(err, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+        return True
+    if isinstance(err, OSError):
+        winerror = getattr(err, "winerror", None)
+        if winerror in (10053, 10054):
+            return True
+        if getattr(err, "errno", None) in (32, 54, 103, 104, 10053, 10054):
+            return True
+    return False
+
+class HLLServer(ThreadingHTTPServer):
+
+    def handle_error(self, request, client_address):
+        err = sys.exc_info()[1]
+        if is_client_disconnect_error(err):
+            return
+        super().handle_error(request, client_address)
+
 class HLLHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
@@ -527,11 +546,8 @@ class HLLHandler(SimpleHTTPRequestHandler):
         # Ignore connection resets — phone screen locks, tab closes mid-request etc.
         import sys
         err = sys.exc_info()[1]
-        if isinstance(err, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+        if is_client_disconnect_error(err):
             return  # Normal — ignore cleanly
-        # Also ignore Windows-specific socket errors (WinError 10053, 10054)
-        if isinstance(err, OSError) and hasattr(err, 'winerror') and err.winerror in (10053, 10054):
-            return
         # For anything else, print it so real bugs are visible
         print(f"  [!] Unexpected error from {client_address}: {err}")
 
@@ -664,19 +680,23 @@ class HLLHandler(SimpleHTTPRequestHandler):
         # ── Serve static files normally ──
         # Add no-cache headers for HTML files so updates show immediately
         if path.endswith('.html'):
-            self.send_response(200)
-            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Expires', '0')
-            self.send_cors_headers()
             try:
+                self.send_response(200)
+                self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+                self.send_header('Pragma', 'no-cache')
+                self.send_header('Expires', '0')
+                self.send_cors_headers()
                 with open(path.lstrip('/'), 'rb') as f:
                     content = f.read()
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.send_header('Content-Length', len(content))
                 self.end_headers()
                 self.wfile.write(content)
-            except:
+            except OSError as e:
+                if is_client_disconnect_error(e):
+                    return
+                super().do_GET()
+            except Exception:
                 super().do_GET()
             return
         super().do_GET()
@@ -718,12 +738,17 @@ class HLLHandler(SimpleHTTPRequestHandler):
 
     def send_json(self, data, code=200):
         body = json.dumps(data).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(body))
-        self.send_cors_headers()
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", len(body))
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(body)
+        except OSError as e:
+            if is_client_disconnect_error(e):
+                return
+            raise
 
     def send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin",  "*")
@@ -795,7 +820,7 @@ if __name__ == "__main__":
 
     ip = get_local_ip()
     try:
-        server = ThreadingHTTPServer(("", PORT), HLLHandler)
+        server = HLLServer(("", PORT), HLLHandler)
         server.allow_reuse_address = True
     except OSError:
         print(f"  [!] Port {PORT} is already in use.")
