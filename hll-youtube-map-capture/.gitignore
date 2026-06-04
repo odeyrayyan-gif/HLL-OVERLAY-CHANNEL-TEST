@@ -1,0 +1,10 @@
+.cache/
+output/*
+!output/.gitkeep
+*.mp4
+*.webm
+*.mkv
+__pycache__/
+*.pyc
+.venv/
+venv/
