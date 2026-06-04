@@ -1,0 +1,28 @@
+# Copy to config.yaml and adjust as needed.
+
+detection:
+  # ORB feature-matching settings (same idea as obs-screen-recognition for HLL).
+  num_features: 500
+  min_good_matches: 12
+  # Target height for detection templates (1080, 1440, 1200).
+  template_resolution: 1080
+
+processing:
+  # Skip frames while scanning. 4 = roughly 4x faster than real time.
+  speed_factor: 4
+  # Minimum seconds between saved map shots for the same open event.
+  min_capture_interval_sec: 2.0
+  # Wait this many closed-map frames before allowing another capture.
+  closed_frames_required: 3
+
+map_crop:
+  # Fraction of frame used when saving the tactical map (center crop).
+  # Tune these if your stream has letterboxing or a non-standard layout.
+  left: 0.22
+  top: 0.07
+  width: 0.56
+  height: 0.86
+
+output:
+  directory: output
+  image_format: png
